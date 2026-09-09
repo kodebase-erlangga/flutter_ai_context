@@ -1,0 +1,16 @@
+name: mixed_legacy
+description: Mixed Provider and Bloc fixture.
+version: 1.0.0
+
+environment:
+  sdk: ^3.5.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  provider: ^6.1.0
+  flutter_bloc: ^8.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter

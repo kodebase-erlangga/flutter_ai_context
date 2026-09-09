@@ -1,0 +1,16 @@
+name: migration_scenario
+description: Provider to Riverpod migration fixture.
+version: 1.0.0
+
+environment:
+  sdk: ^3.5.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  provider: ^6.1.0
+  flutter_riverpod: ^2.6.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter

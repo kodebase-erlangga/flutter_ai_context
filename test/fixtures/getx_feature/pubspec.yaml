@@ -1,0 +1,15 @@
+name: getx_feature
+description: GetX fixture.
+version: 1.0.0
+
+environment:
+  sdk: ^3.5.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  get: ^4.6.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter

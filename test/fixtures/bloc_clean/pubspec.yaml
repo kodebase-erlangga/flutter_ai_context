@@ -1,0 +1,16 @@
+name: bloc_clean
+description: Bloc + repository fixture.
+version: 1.0.0
+
+environment:
+  sdk: ^3.5.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_bloc: ^8.1.0
+  bloc: ^8.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
