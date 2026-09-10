@@ -182,22 +182,37 @@ class AnalysisPipeline {
     );
   }
 
-  /// Re-scan files that depend on symbols changed in [changedFiles].
+  /// Re-scan files that transitively depend on symbols changed in [changedFiles].
   List<String> _expandDependentFiles(
     ProjectGraph graph,
     List<String> changedFiles,
   ) {
     final expanded = changedFiles.toSet();
-    final changedNodeIds = graph.nodes
-        .where((n) => n.file != null && expanded.contains(n.file))
-        .map((n) => n.id)
+    var frontier = graph.nodes
+        .where((node) => node.file != null && expanded.contains(node.file))
+        .map((node) => node.id)
         .toSet();
 
-    for (final edge in graph.edges) {
-      if (!changedNodeIds.contains(edge.to)) continue;
-      final fromNode = graph.findNode(edge.from);
-      final file = fromNode?.file;
-      if (file != null) expanded.add(file);
+    final processed = <String>{};
+    while (frontier.isNotEmpty) {
+      final nextFrontier = <String>{};
+      for (final targetId in frontier) {
+        if (!processed.add(targetId)) continue;
+        for (final edge in graph.edges) {
+          if (edge.to != targetId) continue;
+          final fromNode = graph.findNode(edge.from);
+          final file = fromNode?.file;
+          if (file == null) continue;
+          if (expanded.add(file)) {
+            nextFrontier.addAll(
+              graph.nodes
+                  .where((node) => node.file == file)
+                  .map((node) => node.id),
+            );
+          }
+        }
+      }
+      frontier = nextFrontier;
     }
 
     return expanded.toList();

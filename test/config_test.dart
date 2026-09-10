@@ -27,4 +27,10 @@ void main() {
     expect(restored.stateManagement, 'riverpod');
     expect(restored.preferredScreenSuffix, '_screen');
   });
+
+  test('ProjectConfig reads context token budget', () {
+    const config = ProjectConfig(contextTokenBudget: 1500);
+    final restored = ProjectConfig.fromYamlMap(config.toYamlMap());
+    expect(restored.contextTokenBudget, 1500);
+  });
 }

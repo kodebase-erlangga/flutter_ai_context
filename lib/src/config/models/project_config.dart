@@ -14,6 +14,7 @@ class ProjectConfig {
     ],
     this.contextOutput = '.ai',
     this.generateAgentsMd = true,
+    this.contextTokenBudget = 2000,
     this.directHttpFromUi = 'auto',
     this.preferredScreenSuffix,
     this.preferredProviderSuffix,
@@ -28,6 +29,7 @@ class ProjectConfig {
   final List<String> ignorePatterns;
   final String contextOutput;
   final bool generateAgentsMd;
+  final int contextTokenBudget;
   final String directHttpFromUi;
   final String? preferredScreenSuffix;
   final String? preferredProviderSuffix;
@@ -48,6 +50,7 @@ class ProjectConfig {
       'context': {
         'output': contextOutput,
         'generate_agents_md': generateAgentsMd,
+        'token_budget': contextTokenBudget,
       },
       'rules': {
         'architecture': {'direct_http_from_ui': directHttpFromUi},
@@ -89,6 +92,7 @@ class ProjectConfig {
           ],
       contextOutput: context['output'] as String? ?? '.ai',
       generateAgentsMd: context['generate_agents_md'] as bool? ?? true,
+      contextTokenBudget: _asInt(context['token_budget']) ?? 2000,
       directHttpFromUi: archRules['direct_http_from_ui'] as String? ?? 'auto',
       preferredScreenSuffix: namingRules['screen_suffix'] as String?,
       preferredProviderSuffix: namingRules['provider_suffix'] as String?,
@@ -108,5 +112,11 @@ class ProjectConfig {
       return value.map((e) => e.toString()).toList();
     }
     return null;
+  }
+
+  static int? _asInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '');
   }
 }

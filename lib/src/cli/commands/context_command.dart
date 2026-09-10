@@ -3,6 +3,7 @@ import 'dart:io';
 import '../../cache/cache_manager.dart';
 import '../../config/config_loader.dart';
 import '../../context/relevance_ranker.dart';
+import '../../context/scope_suggester.dart';
 import '../../generators/context_pack_generator.dart';
 import '../../shared/logger.dart';
 import '../../shared/paths.dart';
@@ -20,7 +21,7 @@ class ContextCommand {
 
   int run(String root, String scope) {
     final paths = ProjectPaths(root);
-    _configLoader.load(paths.configFile);
+    final config = _configLoader.load(paths.configFile);
     final cache = CacheManager(paths);
     final graph = cache.loadGraph();
 
@@ -31,9 +32,15 @@ class ContextCommand {
       return 1;
     }
 
-    final ranked = RelevanceRanker().rank(graph, scope);
-    if (ranked.isEmpty) {
+    final ranker = RelevanceRanker();
+    final result = ranker.rank(graph, scope);
+    if (result.nodes.isEmpty) {
       _logger.warn('No context found for scope: $scope');
+      final suggestions = ScopeSuggester().suggest(graph, scope);
+      if (suggestions.isNotEmpty) {
+        _logger.blank();
+        _logger.info('Did you mean: ${suggestions.join(', ')}?');
+      }
       return 1;
     }
 
@@ -41,7 +48,9 @@ class ContextCommand {
     final content = generator.generate(
       scope: scope,
       graph: graph,
-      ranked: ranked,
+      ranked: result.nodes,
+      observedFlow: result.observedFlow,
+      maxTokens: config.contextTokenBudget,
     );
 
     final outputPath = paths.contextFile(scope.toLowerCase());
@@ -52,8 +61,12 @@ class ContextCommand {
     _logger.info('Context generated: $scope');
     _logger.blank();
     _logger.info('Relevant files:');
-    for (final node in ranked.where((n) => n.file != null)) {
+    for (final node in result.nodes.where((n) => n.file != null)) {
       _logger.info('- ${node.file!.split('/').last}');
+    }
+    if (result.observedFlow != null) {
+      _logger.blank();
+      _logger.info('Observed flow: ${result.observedFlow}');
     }
     _logger.blank();
     _logger.info('Estimated context size:');

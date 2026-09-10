@@ -191,11 +191,12 @@ rules:
 
 All analysis runs locally. No source code is uploaded. Secret-like strings are redacted from generated output.
 
-## Limitations (v0.3.0)
+## Limitations (v0.4.0)
 
 - Semantic resolution uses `AnalysisContextCollection` with Element2 fragment fallback and AST heuristics when the SDK context is incomplete.
 - `auto_route` support covers common `AutoRoute` / `@RoutePage` patterns; deep nested routing is not fully supported yet.
-- Incremental `sync` re-scans changed files and direct dependents; transitive invalidation is still limited.
+- Incremental `sync` re-scans changed files and transitive graph dependents (bounded by cached edges).
+- Context packs use graph-distance ranking and a configurable token budget (`context.token_budget`).
 - Doctor rules are expanding but not a replacement for `flutter analyze` or custom linters.
 - **Pre-1.0 API** — graph schema and CLI output may change before `1.0.0`.
 
@@ -211,8 +212,7 @@ dart run bin/flutter_ai_context.dart --help
 
 ## Roadmap
 
-- `0.4.0` — context pack relevance improvements, transitive sync invalidation
-- `1.0.0` — stable schema/CLI contracts
+- `1.0.0` — stable schema/CLI contracts, MCP server prototype
 - Future: MCP server consuming the same Project Knowledge Model
 
 ## Release Notes
