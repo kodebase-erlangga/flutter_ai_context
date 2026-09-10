@@ -26,6 +26,25 @@ final router = GoRouter(
     expect(routes.first.routeType, 'go_router');
   });
 
+  test('detects AutoRoute paths', () {
+    const source = '''
+import 'package:auto_route/auto_route.dart';
+
+final routes = [
+  AutoRoute(
+    path: '/profile',
+    page: ProfileRoute.page,
+  ),
+];
+''';
+
+    final unit = parseString(content: source).unit;
+    final routes = RouteDetector().detect('lib/router.dart', unit);
+
+    expect(routes.map((r) => r.path), contains('/profile'));
+    expect(routes.first.routeType, 'auto_route');
+  });
+
   test('detects context.go navigation', () {
     const source = '''
 void navigate(context) {

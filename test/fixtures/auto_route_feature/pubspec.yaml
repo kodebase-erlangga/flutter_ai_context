@@ -1,0 +1,11 @@
+name: auto_route_feature
+description: Fixture for auto_route detection
+publish_to: none
+
+environment:
+  sdk: ^3.5.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  auto_route: ^9.0.0

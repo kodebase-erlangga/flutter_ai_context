@@ -103,13 +103,105 @@ class _RouteVisitor extends RecursiveAstVisitor<void> {
         );
       }
     }
+
+    if (typeName == 'AutoRoute') {
+      final path = _extractNamedArg(node.argumentList, 'path');
+      final page = _extractNamedArg(node.argumentList, 'page');
+      if (path != null) {
+        routes.add(
+          DetectedRoute(
+            path: path,
+            screenName: _pageToScreenName(page),
+            sourceFile: filePath,
+            confidence: 0.92,
+            evidence: ['AutoRoute(path: $path)'],
+            routeType: 'auto_route',
+          ),
+        );
+      }
+    }
     super.visitInstanceCreationExpression(node);
+  }
+
+  @override
+  void visitClassDeclaration(ClassDeclaration node) {
+    final hasAutoRoute = node.metadata.any((annotation) {
+      final name = annotation.name.name;
+      return name == 'AutoRoute' ||
+          name == 'RoutePage' ||
+          name.endsWith('AutoRoute');
+    });
+    if (hasAutoRoute) {
+      final path = _annotationStringArg(node.metadata, 'path') ??
+          '/${_classRouteName(node.name.lexeme)}';
+      routes.add(
+        DetectedRoute(
+          path: path,
+          screenName: node.name.lexeme,
+          sourceFile: filePath,
+          confidence: 0.88,
+          evidence: ['@${node.metadata.first.name.name} on ${node.name.lexeme}'],
+          routeType: 'auto_route',
+        ),
+      );
+    }
+    super.visitClassDeclaration(node);
+  }
+
+  String _classRouteName(String className) {
+    var name = className;
+    if (name.endsWith('Route')) {
+      name = name.substring(0, name.length - 5);
+    }
+    if (name.endsWith('Page')) {
+      name = name.substring(0, name.length - 4);
+    }
+    return name.toLowerCase();
+  }
+
+  String? _pageToScreenName(String? page) {
+    if (page == null) return null;
+    final cleaned = page.replaceAll('.page', '').replaceAll('Route', '');
+    return cleaned.isEmpty ? null : cleaned;
+  }
+
+  String? _annotationStringArg(
+    NodeList<Annotation> annotations,
+    String argName,
+  ) {
+    for (final annotation in annotations) {
+      final args = annotation.arguments;
+      if (args == null) continue;
+      for (final arg in args.arguments) {
+        if (arg is NamedExpression && arg.name.label.name == argName) {
+          return _stringValue(arg.expression);
+        }
+      }
+    }
+    return null;
   }
 
   @override
   void visitMethodInvocation(MethodInvocation node) {
     final method = node.methodName.name;
     final target = node.target?.toString() ?? '';
+
+    if (method == 'AutoRoute') {
+      final path = _extractNamedArg(node.argumentList, 'path');
+      final page = _extractNamedArg(node.argumentList, 'page');
+      if (path != null) {
+        routes.add(
+          DetectedRoute(
+            path: path,
+            screenName: _pageToScreenName(page),
+            sourceFile: filePath,
+            confidence: 0.9,
+            evidence: ['AutoRoute(path: $path)'],
+            routeType: 'auto_route',
+          ),
+        );
+      }
+    }
 
     if (method == 'GoRoute') {
       final path = _extractNamedArg(node.argumentList, 'path');

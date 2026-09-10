@@ -68,6 +68,9 @@ class SemanticSession {
   /// Resolves supertype name using element model when possible.
   String? resolveSuperType(ClassDeclaration node) {
     final astSuper = node.extendsClause?.superclass.toString();
+    final fromFragment = _resolveSuperTypeFromFragment(node);
+    if (fromFragment != null) return fromFragment;
+
     try {
       // ignore: deprecated_member_use
       final element = node.declaredElement;
@@ -86,6 +89,25 @@ class SemanticSession {
       // Fall back to AST when element model is unavailable.
     }
     return astSuper;
+  }
+
+  String? _resolveSuperTypeFromFragment(ClassDeclaration node) {
+    try {
+      // ignore: experimental_member_use
+      final fragment = node.declaredFragment;
+      if (fragment == null) return null;
+      // ignore: experimental_member_use
+      final element = fragment.element;
+      // ignore: experimental_member_use
+      final supertype = element.supertype;
+      if (supertype == null) return null;
+      // ignore: experimental_member_use
+      final name = supertype.element3.displayName;
+      if (name.isNotEmpty && name != 'Object') return name;
+    } catch (_) {
+      // Fragment API unavailable in this analyzer context.
+    }
+    return null;
   }
 
   /// Resolves invoked method target using semantics with AST fallback.

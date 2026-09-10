@@ -75,6 +75,21 @@ void main() {
     });
   });
 
+  group('Scenario — auto_route', () {
+    test('detects auto_route paths', () async {
+      final result = await analyzeFixture('auto_route_feature');
+
+      expect(
+        result.scanResult.routes.map((r) => r.path),
+        contains('/home'),
+      );
+      expect(
+        result.scanResult.routes.any((r) => r.routeType == 'auto_route'),
+        isTrue,
+      );
+    });
+  });
+
   group('Scenario C — Declared migration', () {
     test('detects declared vs observed conflict', () async {
       final result = await analyzeFixture(

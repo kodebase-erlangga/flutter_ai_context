@@ -23,6 +23,8 @@ class ScanResult {
     required this.partialFailures,
     this.stateManagementSignals = const {},
     this.dioUsageInUi = const [],
+    this.httpUsageInUi = const [],
+    this.screenDirectServiceAccess = const [],
     this.routes = const [],
     this.semanticFilesResolved = 0,
   });
@@ -33,6 +35,8 @@ class ScanResult {
   final List<String> partialFailures;
   final Map<String, int> stateManagementSignals;
   final List<String> dioUsageInUi;
+  final List<String> httpUsageInUi;
+  final List<String> screenDirectServiceAccess;
   final List<DetectedRoute> routes;
   final int semanticFilesResolved;
 }
@@ -64,6 +68,8 @@ class DartScanner {
     final partialFailures = <String>[];
     final smSignals = StateManagementSignals();
     final dioInUi = <String>[];
+    final httpInUi = <String>[];
+    final screenDirectService = <String>[];
     final allRoutes = <DetectedRoute>[];
     var relationships = 0;
     var semanticResolved = 0;
@@ -127,6 +133,10 @@ class DartScanner {
             relationships++;
           },
           onDioInUi: (classId) => dioInUi.add(classId),
+          onHttpInUi: (classId) => httpInUi.add(classId),
+          onScreenDirectService: (screenId, targetId) {
+            screenDirectService.add('$screenId->$targetId');
+          },
         );
         unit.accept(visitor);
       } catch (e) {
@@ -145,6 +155,8 @@ class DartScanner {
       partialFailures: partialFailures,
       stateManagementSignals: smSignals.toMap(),
       dioUsageInUi: dioInUi,
+      httpUsageInUi: httpInUi,
+      screenDirectServiceAccess: screenDirectService,
       routes: allRoutes,
       semanticFilesResolved: semanticResolved,
     );
@@ -243,6 +255,8 @@ class _SemanticClassVisitor extends RecursiveAstVisitor<void> {
     required this.onClass,
     required this.onRelationship,
     required this.onDioInUi,
+    required this.onHttpInUi,
+    required this.onScreenDirectService,
   });
 
   final String filePath;
@@ -258,6 +272,8 @@ class _SemanticClassVisitor extends RecursiveAstVisitor<void> {
     List<String> evidence,
   ) onRelationship;
   final void Function(String classId) onDioInUi;
+  final void Function(String classId) onHttpInUi;
+  final void Function(String screenId, String targetId) onScreenDirectService;
 
   String? _currentClassId;
   NodeType? _currentClassType;
@@ -344,10 +360,12 @@ class _SemanticClassVisitor extends RecursiveAstVisitor<void> {
 
     final methodName = node.methodName.name;
     final ctorType = session.resolveConstructorCall(node);
-    if (ctorType != null &&
-        _isDioType(ctorType) &&
-        _isUiLayer(_currentClassType)) {
-      onDioInUi(_currentClassId!);
+    if (ctorType != null && _isUiLayer(_currentClassType)) {
+      if (_isDioType(ctorType)) {
+        onDioInUi(_currentClassId!);
+      } else if (_isHttpClientType(ctorType)) {
+        onHttpInUi(_currentClassId!);
+      }
     }
 
     if (methodName == 'notifyListeners') {
@@ -361,13 +379,18 @@ class _SemanticClassVisitor extends RecursiveAstVisitor<void> {
 
     final target = session.resolveInvocationTarget(node);
     if (target != null && methodName.isNotEmpty) {
+      final targetId = symbolRegistry.resolve(target, filePath);
       final edgeType = _edgeTypeForCall(methodName, node);
       onRelationship(
         _currentClassId!,
-        symbolRegistry.resolve(target, filePath),
+        targetId,
         edgeType,
         ['$target.$methodName()'],
       );
+      if (_currentClassType == NodeType.screen &&
+          _isServiceLikeTarget(target, methodName)) {
+        onScreenDirectService(_currentClassId!, targetId);
+      }
     }
 
     super.visitMethodInvocation(node);
@@ -377,8 +400,12 @@ class _SemanticClassVisitor extends RecursiveAstVisitor<void> {
   void visitInstanceCreationExpression(InstanceCreationExpression node) {
     if (_currentClassId != null) {
       final typeName = session.resolveConstructedType(node) ?? '';
-      if (_isDioType(typeName) && _isUiLayer(_currentClassType)) {
-        onDioInUi(_currentClassId!);
+      if (_isUiLayer(_currentClassType)) {
+        if (_isDioType(typeName)) {
+          onDioInUi(_currentClassId!);
+        } else if (_isHttpClientType(typeName)) {
+          onHttpInUi(_currentClassId!);
+        }
       }
       if (typeName.isNotEmpty) {
         onRelationship(
@@ -408,4 +435,16 @@ class _SemanticClassVisitor extends RecursiveAstVisitor<void> {
       type == NodeType.screen || type == NodeType.widget;
 
   bool _isDioType(String typeName) => typeName.contains('Dio');
+
+  bool _isHttpClientType(String typeName) =>
+      typeName == 'Client' || typeName.contains('http.Client');
+
+  bool _isServiceLikeTarget(String target, String methodName) {
+    if (methodName == 'get' || methodName == 'post' || methodName == 'fetch') {
+      return true;
+    }
+    return target.endsWith('Service') ||
+        target.endsWith('Repository') ||
+        target.endsWith('Api');
+  }
 }

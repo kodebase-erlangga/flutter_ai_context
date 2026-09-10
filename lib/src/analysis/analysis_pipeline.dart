@@ -3,6 +3,7 @@ import '../config/models/project_config.dart';
 import '../discovery/project_discovery.dart';
 import '../generators/context_generator.dart';
 import '../graph/project_graph.dart';
+import '../graph/schema.dart';
 import '../inference/architecture_inference.dart';
 import '../inference/canonical_reference.dart';
 import '../inference/feature_clustering.dart';
@@ -10,6 +11,7 @@ import '../inference/state_management_detector.dart';
 import '../rules/doctor_engine.dart';
 import '../rules/findings.dart';
 import '../scanner/dart_scanner.dart';
+import '../scanner/detectors/route_detector.dart';
 import '../shared/logger.dart';
 import '../shared/paths.dart';
 
@@ -61,32 +63,45 @@ class AnalysisPipeline {
 
     final discovery = _discovery.discover(root, config);
     final allFiles = discovery.dartFiles;
-    final targetFiles = filesToScan ??
-        (incremental ? cache.changedFiles(root, allFiles) : allFiles);
+    final existingGraph = incremental ? cache.loadGraph() : null;
 
-    if (incremental && targetFiles.isEmpty) {
-      _logger.debug('No changed files, using cached graph');
+    late ScanResult scanResult;
+    late ProjectGraph graph;
+
+    if (incremental && existingGraph != null) {
+      final changed =
+          filesToScan ?? cache.changedFiles(root, allFiles);
+      if (changed.isEmpty) {
+        _logger.debug('No changed files, using cached graph');
+        graph = existingGraph;
+        scanResult = _cachedScanResult(graph, allFiles.length);
+      } else {
+        final targetFiles = _expandDependentFiles(existingGraph, changed);
+        _removeFileNodes(existingGraph, targetFiles);
+        scanResult = await _scanner.scan(
+          root: root,
+          dartFiles: targetFiles,
+          allProjectFiles: allFiles,
+          existingGraph: existingGraph,
+        );
+        graph = scanResult.graph;
+      }
+    } else {
+      scanResult = await _scanner.scan(
+        root: root,
+        dartFiles: filesToScan ?? allFiles,
+        allProjectFiles: allFiles,
+        existingGraph: null,
+      );
+      graph = scanResult.graph;
     }
 
-    ProjectGraph? existingGraph;
-    if (incremental) {
-      existingGraph = cache.loadGraph();
-    }
-
-    if (incremental && existingGraph != null && targetFiles.isNotEmpty) {
-      _removeFileNodes(existingGraph, targetFiles);
-    }
-
-    final scanResult = await _scanner.scan(
-      root: root,
-      dartFiles: incremental && existingGraph != null ? targetFiles : allFiles,
-      allProjectFiles: allFiles,
-      existingGraph: incremental ? existingGraph : null,
-    );
-
-    final graph = scanResult.graph;
     cache.saveGraph(graph);
     cache.updateFileHashes(root, allFiles);
+
+    final routes = incremental
+        ? _routesFromGraph(graph)
+        : scanResult.routes;
 
     final smDetector = StateManagementDetector();
     final stateManagement = smDetector.detect(
@@ -119,6 +134,8 @@ class AnalysisPipeline {
       stateManagement: stateManagement,
       architecture: architecture,
       dioUsageInUi: scanResult.dioUsageInUi,
+      httpUsageInUi: scanResult.httpUsageInUi,
+      screenDirectServiceAccess: scanResult.screenDirectServiceAccess,
     );
 
     ContextGenerator().generateAll(
@@ -131,13 +148,13 @@ class AnalysisPipeline {
       features: features,
       canonical: canonical,
       interpretation: interpretation ?? doctorReport.interpretation,
-      routes: scanResult.routes,
+      routes: routes,
     );
 
     cache.saveMetadata(
       ScanMetadata(
         lastScan: DateTime.now(),
-        filesAnalyzed: scanResult.filesAnalyzed,
+        filesAnalyzed: allFiles.length,
         featureCount: features.length,
         projectName: discovery.projectName,
         isStale: false,
@@ -154,6 +171,51 @@ class AnalysisPipeline {
       canonical: canonical,
       doctorReport: doctorReport,
     );
+  }
+
+  ScanResult _cachedScanResult(ProjectGraph graph, int totalFiles) {
+    return ScanResult(
+      graph: graph,
+      filesAnalyzed: totalFiles,
+      relationshipsResolved: graph.edges.length,
+      partialFailures: const [],
+    );
+  }
+
+  /// Re-scan files that depend on symbols changed in [changedFiles].
+  List<String> _expandDependentFiles(
+    ProjectGraph graph,
+    List<String> changedFiles,
+  ) {
+    final expanded = changedFiles.toSet();
+    final changedNodeIds = graph.nodes
+        .where((n) => n.file != null && expanded.contains(n.file))
+        .map((n) => n.id)
+        .toSet();
+
+    for (final edge in graph.edges) {
+      if (!changedNodeIds.contains(edge.to)) continue;
+      final fromNode = graph.findNode(edge.from);
+      final file = fromNode?.file;
+      if (file != null) expanded.add(file);
+    }
+
+    return expanded.toList();
+  }
+
+  List<DetectedRoute> _routesFromGraph(ProjectGraph graph) {
+    return graph.nodesByType(NodeType.route).map((node) {
+      final routeType =
+          node.metadata['routeType'] as String? ?? 'go_router';
+      return DetectedRoute(
+        path: node.name,
+        screenName: null,
+        sourceFile: node.file ?? 'unknown',
+        confidence: node.confidence,
+        evidence: node.evidence.map((e) => e.description).toList(),
+        routeType: routeType,
+      );
+    }).toList();
   }
 
   void _removeFileNodes(ProjectGraph graph, List<String> files) {

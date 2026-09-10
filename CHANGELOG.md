@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.3.0
+
+### Added
+- Expanded doctor rules: declared vs observed state management, http in UI, screen bypassing state layer, feature missing screen, routing mismatch, provider suffix
+- `auto_route` detection (`AutoRoute`, `@RoutePage`, `@AutoRoute`)
+- Cross-file sync invalidation for direct graph dependents
+- Element2 fragment fallback for supertype resolution
+- Benchmark tests for fixture scan performance
+- Fixture: `auto_route_feature`
+
+### Fixed
+- `status` now reports total indexed files instead of `0` after incremental sync
+- `features.md` deduplicates file paths per feature cluster
+
+## 0.2.1
+
+- Re-publish under verified publisher `sangga.id` (transfer via pub.dev Admin)
+
 ## 0.2.0
 
 ### Added

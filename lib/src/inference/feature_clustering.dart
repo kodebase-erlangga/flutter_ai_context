@@ -18,14 +18,15 @@ class FeatureCluster {
 class FeatureClustering {
   List<FeatureCluster> cluster(ProjectGraph graph) {
     return graph.nodesByType(NodeType.feature).map((feature) {
-      final members = graph
-          .edgesFrom(feature.id)
-          .where((e) => e.type == EdgeType.contains)
-          .map((e) => graph.findNode(e.to))
-          .whereType()
-          .map((n) => n.file ?? n.name)
-          .cast<String>()
-          .toList();
+      final seen = <String>{};
+      final members = <String>[];
+      for (final edge in graph.edgesFrom(feature.id)) {
+        if (edge.type != EdgeType.contains) continue;
+        final node = graph.findNode(edge.to);
+        if (node == null) continue;
+        final member = node.file ?? node.name;
+        if (seen.add(member)) members.add(member);
+      }
       return FeatureCluster(
         name: feature.name,
         members: members,
