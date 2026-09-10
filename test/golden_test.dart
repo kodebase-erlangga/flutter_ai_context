@@ -1,6 +1,8 @@
 import 'dart:io';
 
+import 'package:flutter_ai_context/src/context/relevance_ranker.dart';
 import 'package:flutter_ai_context/src/generators/architecture_md_generator.dart';
+import 'package:flutter_ai_context/src/generators/context_pack_generator.dart';
 import 'package:flutter_ai_context/src/generators/routes_md_generator.dart';
 import 'package:test/test.dart';
 
@@ -29,6 +31,21 @@ void main() {
     final content = RoutesMdGenerator().generate(result.scanResult.routes);
 
     final goldenPath = '${goldensDir.path}/riverpod_feature_routes.md';
+    _assertGolden(goldenPath, content);
+  });
+
+  test('context pack golden for provider attendance', () async {
+    final result = await analyzeFixture('provider_feature_first');
+    final rank = RelevanceRanker().rank(result.scanResult.graph, 'Attendance');
+    final content = ContextPackGenerator().generate(
+      scope: 'Attendance',
+      graph: result.scanResult.graph,
+      ranked: rank.nodes,
+      observedFlow: rank.observedFlow,
+      maxTokens: 2000,
+    );
+
+    final goldenPath = '${goldensDir.path}/provider_attendance_context.md';
     _assertGolden(goldenPath, content);
   });
 

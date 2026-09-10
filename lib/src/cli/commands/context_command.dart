@@ -5,6 +5,7 @@ import '../../config/config_loader.dart';
 import '../../context/relevance_ranker.dart';
 import '../../context/scope_suggester.dart';
 import '../../generators/context_pack_generator.dart';
+import '../../graph/schema.dart';
 import '../../shared/logger.dart';
 import '../../shared/paths.dart';
 
@@ -18,6 +19,38 @@ class ContextCommand {
 
   final ConfigLoader _configLoader;
   final Logger _logger;
+
+  int listScopes(String root) {
+    final cache = CacheManager(ProjectPaths(root));
+    final graph = cache.loadGraph();
+    if (graph == null) {
+      _logger.error(
+        'No project graph found. Run `flutter_ai_context scan` first.',
+      );
+      return 1;
+    }
+
+    final features = graph.nodesByType(NodeType.feature).toList()
+      ..sort((a, b) => a.name.compareTo(b.name));
+
+    _logger.info('Available context scopes:');
+    _logger.blank();
+    if (features.isEmpty) {
+      _logger.warn('No feature scopes detected yet.');
+      return 0;
+    }
+
+    for (final feature in features) {
+      final members = graph
+          .edgesFrom(feature.id)
+          .where((edge) => edge.type == EdgeType.contains)
+          .length;
+      _logger.info('- ${feature.name} ($members members)');
+    }
+    _logger.blank();
+    _logger.info('Usage: flutter_ai_context context <scope>');
+    return 0;
+  }
 
   int run(String root, String scope) {
     final paths = ProjectPaths(root);

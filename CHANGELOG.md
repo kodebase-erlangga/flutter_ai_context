@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.5.0
+
+### Added
+- `flutter_ai_context context --list` to discover available feature scopes
+- Class signatures in context packs (supertype + key methods from graph metadata)
+- Import-graph sync invalidation (re-scan files that import changed modules)
+- Lazy per-file semantic resolution for faster scans
+- Golden test for attendance context pack output
+
+### Improved
+- Doctor `screen_bypasses_state_management` ignores test/generated files and watch/read edges
+- Context pack file entries now include compact class signatures
+
 ## 0.4.0
 
 ### Added

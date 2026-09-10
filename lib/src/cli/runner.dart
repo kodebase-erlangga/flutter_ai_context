@@ -10,7 +10,7 @@ import 'commands/status_command.dart';
 import 'commands/sync_command.dart';
 
 /// CLI version.
-const cliVersion = '0.4.0';
+const cliVersion = '0.5.0';
 
 /// Main CLI runner.
 class CliRunner {
@@ -33,6 +33,7 @@ class CliRunner {
         'context',
         ArgParser()
           ..addFlag('help', negatable: false)
+          ..addFlag('list', negatable: false, help: 'List available scopes.')
           ..addOption('scope', help: 'Feature or scope name.'),
       );
   }
@@ -78,11 +79,16 @@ class CliRunner {
         case 'doctor':
           return DoctorCommand(logger: _logger).run(root);
         case 'context':
+          if (command.flag('list')) {
+            return ContextCommand(logger: _logger).listScopes(root);
+          }
           final scope = command['scope'] as String? ??
               (command.rest.isNotEmpty ? command.rest.first : null);
           if (scope == null) {
             _logger.error(
-                'Scope required. Usage: flutter_ai_context context <scope>');
+              'Scope required. Usage: flutter_ai_context context <scope> '
+              '(or --list)',
+            );
             return 64;
           }
           return ContextCommand(logger: _logger).run(root, scope);
@@ -112,7 +118,7 @@ class CliRunner {
     _logger.info('  sync      Incremental update');
     _logger.info('  status    Check context freshness');
     _logger.info('  doctor    Architecture consistency check');
-    _logger.info('  context   Generate focused context pack');
+    _logger.info('  context   Generate focused context pack (--list)');
     _logger.blank();
     _logger.info('Global options:');
     _logger.info(parser.usage);

@@ -12,6 +12,7 @@ import '../rules/doctor_engine.dart';
 import '../rules/findings.dart';
 import '../scanner/dart_scanner.dart';
 import '../scanner/detectors/route_detector.dart';
+import '../scanner/import_resolver.dart';
 import '../shared/logger.dart';
 import '../shared/paths.dart';
 
@@ -215,7 +216,21 @@ class AnalysisPipeline {
       frontier = nextFrontier;
     }
 
+    expanded.addAll(_importDependents(graph, expanded));
     return expanded.toList();
+  }
+
+  List<String> _importDependents(ProjectGraph graph, Set<String> changedFiles) {
+    final importsByFile = <String, List<String>>{};
+    for (final node in graph.nodesByType(NodeType.file)) {
+      final file = node.file;
+      if (file == null) continue;
+      importsByFile[file] = (node.metadata['imports'] as List?)
+              ?.map((value) => value.toString())
+              .toList() ??
+          const [];
+    }
+    return ImportResolver().filesImporting(importsByFile, changedFiles);
   }
 
   List<DetectedRoute> _routesFromGraph(ProjectGraph graph) {

@@ -12,6 +12,7 @@ import '../shared/logger.dart';
 import 'classifiers/file_classifier.dart';
 import 'detectors/route_detector.dart';
 import 'detectors/state_management_signal_detector.dart';
+import 'import_resolver.dart';
 import 'semantic_session.dart';
 
 /// Scan result containing graph and metadata.
@@ -76,6 +77,7 @@ class DartScanner {
 
     final session = SemanticSession(logger: _logger);
     await session.load(root);
+    final importResolver = ImportResolver();
 
     final indexFiles = allProjectFiles ?? dartFiles;
     final classIndex = session.buildClassIndex(root, indexFiles);
@@ -84,9 +86,16 @@ class DartScanner {
     for (final relativePath in dartFiles) {
       final absolutePath = p.join(root, relativePath);
       try {
+        await session.ensureResolved(absolutePath);
         final content = File(absolutePath).readAsStringSync();
         final unit = session.getUnit(absolutePath, content);
         if (session.isSemanticallyResolved(absolutePath)) semanticResolved++;
+
+        final importUris = _collectImports(unit);
+        final resolvedImports = importResolver.resolveImports(
+          sourceFile: relativePath,
+          importUris: importUris,
+        );
 
         graph.addNode(
           GraphNode(
@@ -94,11 +103,21 @@ class DartScanner {
             type: NodeType.file,
             name: p.basename(relativePath),
             file: relativePath,
+            metadata: {'imports': resolvedImports},
           ),
         );
 
-        final imports = _collectImports(unit);
-        smSignals.merge(_signalDetector.detect(unit, imports));
+        for (final imported in resolvedImports) {
+          graph.addEdge(
+            GraphEdge(
+              from: NodeId.forFile(relativePath),
+              to: NodeId.forFile(imported),
+              type: EdgeType.imports,
+            ),
+          );
+        }
+
+        smSignals.merge(_signalDetector.detect(unit, importUris));
 
         final routes = _routeDetector.detect(relativePath, unit);
         allRoutes.addAll(routes);
@@ -341,6 +360,8 @@ class _SemanticClassVisitor extends RecursiveAstVisitor<void> {
             'featureHint': classification.featureHint,
           if (classification.stateManagementFramework != null)
             'stateManagementFramework': classification.stateManagementFramework,
+          if (superClass != null && superClass.isNotEmpty) 'superType': superClass,
+          if (methods.isNotEmpty) 'methods': methods.take(8).toList(),
         },
       ),
       classification,
@@ -387,8 +408,11 @@ class _SemanticClassVisitor extends RecursiveAstVisitor<void> {
         edgeType,
         ['$target.$methodName()'],
       );
-      if (_currentClassType == NodeType.screen &&
-          _isServiceLikeTarget(target, methodName)) {
+      if (_shouldFlagScreenBypass(
+        edgeType: edgeType,
+        target: target,
+        methodName: methodName,
+      )) {
         onScreenDirectService(_currentClassId!, targetId);
       }
     }
@@ -439,12 +463,25 @@ class _SemanticClassVisitor extends RecursiveAstVisitor<void> {
   bool _isHttpClientType(String typeName) =>
       typeName == 'Client' || typeName.contains('http.Client');
 
-  bool _isServiceLikeTarget(String target, String methodName) {
-    if (methodName == 'get' || methodName == 'post' || methodName == 'fetch') {
-      return true;
+  bool _shouldFlagScreenBypass({
+    required EdgeType edgeType,
+    required String target,
+    required String methodName,
+  }) {
+    if (_currentClassType != NodeType.screen) return false;
+    if (edgeType == EdgeType.watches || edgeType == EdgeType.reads) {
+      return false;
+    }
+    if (filePath.contains('/test/') ||
+        filePath.contains('.g.dart') ||
+        filePath.contains('.freezed.dart')) {
+      return false;
     }
     return target.endsWith('Service') ||
         target.endsWith('Repository') ||
-        target.endsWith('Api');
+        target.endsWith('ApiClient') ||
+        target.endsWith('Api') ||
+        methodName == 'fetch' ||
+        methodName == 'getAttendance';
   }
 }

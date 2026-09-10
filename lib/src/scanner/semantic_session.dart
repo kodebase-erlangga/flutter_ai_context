@@ -9,48 +9,53 @@ import 'package:path/path.dart' as p;
 
 import '../shared/logger.dart';
 
-/// Wraps [AnalysisContextCollection] with parse fallback.
+/// Wraps [AnalysisContextCollection] with lazy per-file resolution.
 class SemanticSession {
   SemanticSession({Logger? logger}) : _logger = logger ?? Logger();
 
   final Logger _logger;
   final Map<String, ResolvedUnitResult> _resolvedUnits = {};
-  bool _collectionLoaded = false;
+  AnalysisContextCollection? _collection;
+  String? _projectRoot;
 
-  /// Loads semantic context for the project root.
+  /// Prepares semantic context without resolving every file upfront.
   Future<void> load(String projectRoot) async {
     _resolvedUnits.clear();
-    _collectionLoaded = false;
+    _projectRoot = p.normalize(projectRoot);
+    _collection = null;
 
     try {
-      final collection = AnalysisContextCollection(
-        includedPaths: [p.normalize(projectRoot)],
+      _collection = AnalysisContextCollection(
+        includedPaths: [_projectRoot!],
         resourceProvider: PhysicalResourceProvider.INSTANCE,
       );
-
-      for (final context in collection.contexts) {
-        for (final path in context.contextRoot.analyzedFiles()) {
-          if (!path.endsWith('.dart')) continue;
-          try {
-            final result = await context.currentSession.getResolvedUnit(path);
-            if (result is ResolvedUnitResult) {
-              _resolvedUnits[p.normalize(path)] = result;
-            }
-          } catch (e) {
-            _logger.debug('Could not resolve $path: $e');
-          }
-        }
-      }
-      _collectionLoaded = true;
-      _logger.debug(
-        'Semantic session loaded ${_resolvedUnits.length} resolved units',
-      );
+      _logger.debug('Semantic session initialized (lazy resolution enabled)');
     } catch (e) {
       _logger.debug('AnalysisContextCollection unavailable: $e');
     }
   }
 
-  bool get hasCollection => _collectionLoaded && _resolvedUnits.isNotEmpty;
+  bool get hasCollection => _collection != null;
+
+  /// Lazily resolves a single Dart unit when semantic context is available.
+  Future<void> ensureResolved(String absolutePath) async {
+    final normalized = p.normalize(absolutePath);
+    if (_resolvedUnits.containsKey(normalized) || _collection == null) {
+      return;
+    }
+
+    for (final context in _collection!.contexts) {
+      try {
+        final result = await context.currentSession.getResolvedUnit(normalized);
+        if (result is ResolvedUnitResult) {
+          _resolvedUnits[normalized] = result;
+          return;
+        }
+      } catch (e) {
+        _logger.debug('Could not resolve $normalized: $e');
+      }
+    }
+  }
 
   /// Returns compilation unit with semantic info when available.
   CompilationUnit getUnit(String absolutePath, String content) {

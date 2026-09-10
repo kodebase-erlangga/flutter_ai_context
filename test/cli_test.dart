@@ -26,5 +26,12 @@ void main() {
       final code = await CliRunner().run(['context'], projectRoot: root);
       expect(code, 64);
     });
+
+    test('context --list returns available scopes', () async {
+      final root = fixturePath('provider_feature_first');
+      await CliRunner().run(['init'], projectRoot: root);
+      final code = await CliRunner().run(['context', '--list'], projectRoot: root);
+      expect(code, 0);
+    });
   });
 }

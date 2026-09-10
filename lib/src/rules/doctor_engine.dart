@@ -89,6 +89,9 @@ class DoctorEngine {
       if (parts.length != 2) continue;
       final screenNode = graph.findNode(parts[0]);
       final targetNode = graph.findNode(parts[1]);
+      final screenFile = screenNode?.file ?? '';
+      if (_isGeneratedOrTestPath(screenFile)) continue;
+      if (targetNode != null && !_isDataLayerNode(targetNode.type)) continue;
       findings.add(
         DoctorFinding(
           severity: FindingSeverity.warning,
@@ -286,6 +289,19 @@ class DoctorEngine {
 
   String _capitalize(String input) =>
       input.isEmpty ? input : input[0].toUpperCase() + input.substring(1);
+
+  bool _isGeneratedOrTestPath(String file) {
+    return file.contains('/test/') ||
+        file.contains('.g.dart') ||
+        file.contains('.freezed.dart') ||
+        file.contains('/generated/');
+  }
+
+  bool _isDataLayerNode(NodeType type) {
+    return type == NodeType.service ||
+        type == NodeType.repository ||
+        type == NodeType.apiClient;
+  }
 }
 
 extension _FirstOrNull<E> on Iterable<E> {

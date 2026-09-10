@@ -1,3 +1,4 @@
+import '../context/class_signature.dart';
 import '../context/relevance_ranker.dart';
 import '../context/token_estimator.dart';
 import '../graph/project_graph.dart';
@@ -7,6 +8,11 @@ import 'markdown_header.dart';
 
 /// Generates focused context packs.
 class ContextPackGenerator {
+  ContextPackGenerator({ClassSignatureFormatter? signatureFormatter})
+      : _signatureFormatter = signatureFormatter ?? ClassSignatureFormatter();
+
+  final ClassSignatureFormatter _signatureFormatter;
+
   String generate({
     required String scope,
     required ProjectGraph graph,
@@ -25,6 +31,7 @@ class ContextPackGenerator {
     return Redaction.sanitize(
       _render(
         scope: scope,
+        graph: graph,
         ranked: selected,
         observedFlow: observedFlow,
       ),
@@ -33,6 +40,7 @@ class ContextPackGenerator {
 
   String _render({
     required String scope,
+    required ProjectGraph graph,
     required List<RankedNode> ranked,
     String? observedFlow,
   }) {
@@ -46,11 +54,11 @@ class ContextPackGenerator {
       buffer.writeln();
     }
 
-    _writeGroup(buffer, 'Screens', ranked, _isScreen);
-    _writeGroup(buffer, 'State Management', ranked, _isState);
-    _writeGroup(buffer, 'Data Layer', ranked, _isData);
-    _writeGroup(buffer, 'Routes', ranked, _isRoute);
-    _writeGroup(buffer, 'Other', ranked, _isOther);
+    _writeGroup(buffer, graph, 'Screens', ranked, _isScreen);
+    _writeGroup(buffer, graph, 'State Management', ranked, _isState);
+    _writeGroup(buffer, graph, 'Data Layer', ranked, _isData);
+    _writeGroup(buffer, graph, 'Routes', ranked, _isRoute);
+    _writeGroup(buffer, graph, 'Other', ranked, _isOther);
 
     buffer.writeln('## Related Nodes');
     buffer.writeln();
@@ -76,6 +84,7 @@ class ContextPackGenerator {
     for (final node in ranked) {
       final preview = _render(
         scope: scope,
+        graph: graph,
         ranked: [...selected, node],
         observedFlow: observedFlow,
       );
@@ -87,6 +96,7 @@ class ContextPackGenerator {
 
   void _writeGroup(
     StringBuffer buffer,
+    ProjectGraph graph,
     String title,
     List<RankedNode> nodes,
     bool Function(NodeType?) predicate,
@@ -97,11 +107,12 @@ class ContextPackGenerator {
     buffer.writeln('## $title');
     buffer.writeln();
     for (final node in group) {
-      if (node.file != null) {
-        buffer.writeln(
-          '- `${node.file}` — ${node.reason} (${node.score.toStringAsFixed(2)})',
-        );
-      }
+      if (node.file == null) continue;
+      final signature = _signatureFormatter.format(graph, node);
+      final details = signature ?? node.name;
+      buffer.writeln(
+        '- `${node.file}` — $details (${node.score.toStringAsFixed(2)})',
+      );
     }
     buffer.writeln();
   }
