@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.0
+
+### Added
+- MCP Phase 2 tools: `sync_context`, `run_doctor`, `query_graph`
+- MCP resource: `flutter-ai-context://graph` (full JSON or summary when large)
+
 ## 0.7.0
 
 ### Added

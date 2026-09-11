@@ -4,11 +4,12 @@ import 'package:dart_mcp/server.dart';
 import 'package:stream_channel/stream_channel.dart';
 
 import '../cli/runner.dart';
+import 'graph_query.dart';
 import 'mcp_project_service.dart';
 import 'mcp_uris.dart';
 import 'project_root.dart';
 
-/// MCP server exposing read-only flutter_ai_context project intelligence.
+/// MCP server exposing flutter_ai_context project intelligence.
 final class FlutterAiContextMcpServer extends MCPServer
     with ToolsSupport, ResourcesSupport {
   FlutterAiContextMcpServer({
@@ -25,8 +26,9 @@ final class FlutterAiContextMcpServer extends MCPServer
           ),
           instructions:
               'Local-first Flutter project intelligence from flutter_ai_context. '
-              'Use project_status to check FRESH/STALE, list_features for scopes, '
-              'and get_context for token-budgeted feature context packs.',
+              'Use project_status to check FRESH/STALE, sync_context to update, '
+              'list_features / get_context for feature packs, query_graph for '
+              'graph search, and run_doctor for architecture checks.',
         );
 
   final McpProjectService _service;
@@ -78,6 +80,62 @@ final class FlutterAiContextMcpServer extends MCPServer
       ),
       _handleGetContext,
     );
+
+    registerTool(
+      Tool(
+        name: 'sync_context',
+        description:
+            'Incrementally update project context when STALE or after code changes.',
+        inputSchema: ObjectSchema(
+          properties: {
+            'force': BooleanSchema(
+              description: 'Run sync even when context is already FRESH.',
+            ),
+          },
+        ),
+      ),
+      _handleSyncContext,
+    );
+
+    registerTool(
+      Tool(
+        name: 'run_doctor',
+        description:
+            'Run architecture consistency checks and return readiness score.',
+        inputSchema: ObjectSchema(),
+      ),
+      _handleRunDoctor,
+    );
+
+    registerTool(
+      Tool(
+        name: 'query_graph',
+        description:
+            'Search project knowledge graph nodes by type, feature, or name.',
+        inputSchema: ObjectSchema(
+          properties: {
+            'nodeType': StringSchema(
+              description:
+                  'Node wire type filter, e.g. screen, provider, repository.',
+            ),
+            'feature': StringSchema(
+              description: 'Feature name filter (case-insensitive).',
+            ),
+            'nameContains': StringSchema(
+              description: 'Substring match on node name.',
+            ),
+            'limit': IntegerSchema(
+              description:
+                  'Max nodes to return (default ${GraphQuery.defaultLimit}, max ${GraphQuery.maxLimit}).',
+            ),
+            'offset': IntegerSchema(
+              description: 'Pagination offset (default 0).',
+            ),
+          },
+        ),
+      ),
+      _handleQueryGraph,
+    );
   }
 
   void _registerResources() {
@@ -91,6 +149,7 @@ final class FlutterAiContextMcpServer extends MCPServer
       (request) => _textResourceResult(
         request.uri,
         _service.readAgentsMarkdown(overrideRoot: _projectRoot),
+        mimeType: 'text/markdown',
       ),
     );
 
@@ -104,6 +163,22 @@ final class FlutterAiContextMcpServer extends MCPServer
       (request) => _textResourceResult(
         request.uri,
         _service.readArchitectureMarkdown(overrideRoot: _projectRoot),
+        mimeType: 'text/markdown',
+      ),
+    );
+
+    addResource(
+      Resource(
+        uri: McpUris.graph,
+        name: 'graph',
+        description:
+            'Project knowledge graph JSON (summary when file exceeds size limit).',
+        mimeType: 'application/json',
+      ),
+      (request) => _textResourceResult(
+        request.uri,
+        _service.readGraphJson(overrideRoot: _projectRoot),
+        mimeType: 'application/json',
       ),
     );
 
@@ -122,6 +197,7 @@ final class FlutterAiContextMcpServer extends MCPServer
             uri: request.uri,
             overrideRoot: _projectRoot,
           ),
+          mimeType: 'text/markdown',
         );
       },
     );
@@ -155,10 +231,57 @@ final class FlutterAiContextMcpServer extends MCPServer
     );
   }
 
+  Future<CallToolResult> _handleSyncContext(CallToolRequest request) async {
+    final force = request.arguments?['force'] as bool? ?? false;
+    return _runToolAsync(() async {
+      final result = await _service.syncContext(
+        force: force,
+        overrideRoot: _projectRoot,
+      );
+      return _service.encodeJson(result);
+    });
+  }
+
+  Future<CallToolResult> _handleRunDoctor(CallToolRequest request) async {
+    return _runToolAsync(() async {
+      final result = await _service.runDoctor(overrideRoot: _projectRoot);
+      return _service.encodeJson(result);
+    });
+  }
+
+  CallToolResult _handleQueryGraph(CallToolRequest request) {
+    final args = request.arguments ?? {};
+    return _runTool(() {
+      final result = _service.queryGraph(
+        nodeType: args['nodeType'] as String?,
+        feature: args['feature'] as String?,
+        nameContains: args['nameContains'] as String?,
+        limit: (args['limit'] as num?)?.toInt(),
+        offset: (args['offset'] as num?)?.toInt(),
+        overrideRoot: _projectRoot,
+      );
+      return _service.encodeJson(result);
+    });
+  }
+
   CallToolResult _runTool(String Function() action) {
     try {
       return CallToolResult(
         content: [Content.text(text: action())],
+      );
+    } on McpProjectException catch (e) {
+      return _errorResult(e.message);
+    } catch (e) {
+      return _errorResult('$e');
+    }
+  }
+
+  Future<CallToolResult> _runToolAsync(
+    Future<String> Function() action,
+  ) async {
+    try {
+      return CallToolResult(
+        content: [Content.text(text: await action())],
       );
     } on McpProjectException catch (e) {
       return _errorResult(e.message);
@@ -174,15 +297,31 @@ final class FlutterAiContextMcpServer extends MCPServer
     );
   }
 
-  ReadResourceResult _textResourceResult(String uri, String text) {
-    return ReadResourceResult(
-      contents: [
-        TextResourceContents(
-          uri: uri,
-          text: text,
-          mimeType: 'text/markdown',
-        ),
-      ],
-    );
+  ReadResourceResult _textResourceResult(
+    String uri,
+    String text, {
+    required String mimeType,
+  }) {
+    try {
+      return ReadResourceResult(
+        contents: [
+          TextResourceContents(
+            uri: uri,
+            text: text,
+            mimeType: mimeType,
+          ),
+        ],
+      );
+    } on McpProjectException catch (e) {
+      return ReadResourceResult(
+        contents: [
+          TextResourceContents(
+            uri: uri,
+            text: e.message,
+            mimeType: 'text/plain',
+          ),
+        ],
+      );
+    }
   }
 }

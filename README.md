@@ -27,7 +27,7 @@
 ```yaml
 # pubspec.yaml
 dev_dependencies:
-  flutter_ai_context: ^0.7.0
+  flutter_ai_context: ^0.8.0
 ```
 
 ```bash
@@ -90,8 +90,8 @@ dart run flutter_ai_context mcp
 }
 ```
 
-**Tools:** `project_status`, `list_features`, `get_context`  
-**Resources:** `flutter-ai-context://agents`, `architecture`, `context/{scope}`
+**Tools:** `project_status`, `list_features`, `get_context`, `sync_context`, `run_doctor`, `query_graph`  
+**Resources:** `flutter-ai-context://agents`, `architecture`, `graph`, `context/{scope}`
 
 See [doc/MCP_DESIGN.md](doc/MCP_DESIGN.md) for the full roadmap.
 

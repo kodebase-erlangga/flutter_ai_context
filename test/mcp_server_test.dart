@@ -86,7 +86,7 @@ Future<void> _seedFixture(String fixtureName) async {
 }
 
 void main() {
-  group('MCP Phase 1', () {
+  group('MCP server', () {
     late _McpTestEnvironment environment;
 
     setUp(() async {
@@ -97,11 +97,18 @@ void main() {
       await environment.initializeServer();
     });
 
-    test('exposes phase 1 tools', () async {
+    test('exposes phase 1 and phase 2 tools', () async {
       final tools = await environment.serverConnection.listTools();
       expect(
         tools.tools.map((t) => t.name),
-        containsAll(['project_status', 'list_features', 'get_context']),
+        containsAll([
+          'project_status',
+          'list_features',
+          'get_context',
+          'sync_context',
+          'run_doctor',
+          'query_graph',
+        ]),
       );
     });
 
@@ -136,7 +143,7 @@ void main() {
 
       expect(result.isError, isNot(true));
       final text = (result.content.single as TextContent).text;
-      expect(text, contains('# Context: attendance'));
+      expect(text.toLowerCase(), contains('# context: attendance'));
       expect(text, contains('Observed Flow'));
     });
 
@@ -156,6 +163,56 @@ void main() {
       );
     });
 
+    test('sync_context skips when already FRESH', () async {
+      final result = await environment.serverConnection.callTool(
+        CallToolRequest(name: 'sync_context'),
+      );
+
+      expect(result.isError, isNot(true));
+      final text = (result.content.single as TextContent).text;
+      expect(text, contains('"synced": false'));
+      expect(text, contains('"context": "FRESH"'));
+    });
+
+    test('run_doctor returns readiness score', () async {
+      final result = await environment.serverConnection.callTool(
+        CallToolRequest(name: 'run_doctor'),
+      );
+
+      expect(result.isError, isNot(true));
+      final text = (result.content.single as TextContent).text;
+      expect(text, contains('readinessScore'));
+      expect(text, contains('AI Readiness Score'));
+    });
+
+    test('query_graph filters attendance screens', () async {
+      final result = await environment.serverConnection.callTool(
+        CallToolRequest(
+          name: 'query_graph',
+          arguments: {
+            'nodeType': 'screen',
+            'feature': 'Attendance',
+          },
+        ),
+      );
+
+      expect(result.isError, isNot(true));
+      final text = (result.content.single as TextContent).text;
+      expect(text, contains('AttendanceScreen'));
+    });
+
+    test('graph resource returns JSON', () async {
+      final resources = await environment.serverConnection.listResources();
+      expect(resources.resources.map((r) => r.uri), contains(McpUris.graph));
+
+      final graph = await environment.serverConnection.readResource(
+        ReadResourceRequest(uri: McpUris.graph),
+      );
+      final text = (graph.contents.single as TextResourceContents).text;
+      expect(text, contains('"schemaVersion"'));
+      expect(text, contains('"nodes"'));
+    });
+
     test('context resource template serves feature markdown', () async {
       final templates =
           await environment.serverConnection.listResourceTemplates();
@@ -168,8 +225,8 @@ void main() {
         ReadResourceRequest(uri: 'flutter-ai-context://context/attendance'),
       );
       expect(
-        (context.contents.single as TextResourceContents).text,
-        contains('# Context: attendance'),
+        (context.contents.single as TextResourceContents).text.toLowerCase(),
+        contains('# context: attendance'),
       );
     });
   });

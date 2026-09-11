@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 
+import '../analysis/analysis_pipeline.dart';
 import '../cache/cache_manager.dart';
+import '../cli/output/formatter.dart';
 import '../config/config_loader.dart';
 import '../context/relevance_ranker.dart';
 import '../context/scope_suggester.dart';
@@ -9,23 +11,34 @@ import '../discovery/project_discovery.dart';
 import '../generators/context_pack_generator.dart';
 import '../graph/project_graph.dart';
 import '../graph/schema.dart';
+import '../rules/findings.dart';
+import '../shared/logger.dart';
 import '../shared/paths.dart';
+import 'graph_query.dart';
 import 'mcp_uris.dart';
 import 'project_root.dart';
 
-/// Read-only project intelligence for MCP tools and resources.
+/// Project intelligence for MCP tools and resources.
 class McpProjectService {
   McpProjectService({
     ConfigLoader? configLoader,
     ProjectDiscovery? discovery,
     ProjectRootResolver? rootResolver,
+    AnalysisPipeline? pipeline,
+    GraphQuery? graphQuery,
   })  : _configLoader = configLoader ?? ConfigLoader(),
         _discovery = discovery ?? ProjectDiscovery(),
-        _rootResolver = rootResolver ?? const ProjectRootResolver();
+        _rootResolver = rootResolver ?? const ProjectRootResolver(),
+        _pipeline = pipeline ?? AnalysisPipeline(logger: Logger(level: LogLevel.quiet)),
+        _graphQuery = graphQuery ?? const GraphQuery();
+
+  static const maxFullGraphBytes = 256 * 1024;
 
   final ConfigLoader _configLoader;
   final ProjectDiscovery _discovery;
   final ProjectRootResolver _rootResolver;
+  final AnalysisPipeline _pipeline;
+  final GraphQuery _graphQuery;
 
   String resolveRoot({String? overrideRoot, String? cwd}) {
     return _rootResolver.resolve(overrideRoot: overrideRoot, cwd: cwd);
@@ -90,8 +103,149 @@ class McpProjectService {
       'changedFiles': changedCount,
       'projectRoot': root,
       if (status == 'STALE')
-        'hint': 'Run `flutter_ai_context sync` to refresh context.',
+        'hint': 'Run tool `sync_context` to refresh context.',
     };
+  }
+
+  Future<Map<String, Object?>> syncContext({
+    bool force = false,
+    String? overrideRoot,
+    String? cwd,
+  }) async {
+    final root = resolveRoot(overrideRoot: overrideRoot, cwd: cwd);
+    final paths = ProjectPaths(root);
+    final config = _configLoader.load(paths.configFile);
+    final cache = CacheManager(paths);
+    cache.load();
+
+    final discovery = _discovery.discover(root, config);
+    final changedBefore = cache.countChangedFiles(root, discovery.dartFiles);
+    final schemaMismatch = cache.schemaMismatch;
+
+    if (!force && changedBefore == 0 && !schemaMismatch) {
+      return {
+        'synced': false,
+        'context': 'FRESH',
+        'changedFiles': 0,
+        'message': 'No changed files — context already up to date.',
+      };
+    }
+
+    final result = await _pipeline.run(
+      root: root,
+      config: config,
+      paths: paths,
+      cache: cache,
+      incremental: !schemaMismatch,
+    );
+
+    final changedAfter = cache.countChangedFiles(root, discovery.dartFiles);
+    final status = changedAfter > 0 ? 'STALE' : 'FRESH';
+
+    return {
+      'synced': true,
+      'context': status,
+      'features': result.features.length,
+      'filesSynced': changedBefore,
+      'changedFilesRemaining': changedAfter,
+      if (schemaMismatch) 'rebuilt': true,
+    };
+  }
+
+  Future<Map<String, Object?>> runDoctor({
+    String? overrideRoot,
+    String? cwd,
+  }) async {
+    final root = resolveRoot(overrideRoot: overrideRoot, cwd: cwd);
+    final paths = ProjectPaths(root);
+    final config = _configLoader.load(paths.configFile);
+    final cache = CacheManager(paths);
+    final graph = cache.loadGraph();
+
+    final result = graph == null
+        ? await _pipeline.run(
+            root: root,
+            config: config,
+            paths: paths,
+            cache: cache,
+          )
+        : await _pipeline.run(
+            root: root,
+            config: config,
+            paths: paths,
+            cache: cache,
+            incremental: true,
+          );
+
+    final report = result.doctorReport;
+    return {
+      'readinessScore': report.readinessScore,
+      'observedArchitecture': report.observedArchitecture,
+      'declaredArchitecture': report.declaredArchitecture,
+      if (report.interpretation != null) 'interpretation': report.interpretation,
+      'findings': report.findings
+          .map(
+            (finding) => {
+              'severity': finding.severity.name,
+              'message': finding.message,
+              'file': finding.file,
+              if (finding.rule != null) 'rule': finding.rule,
+              if (finding.remediation != null) 'remediation': finding.remediation,
+            },
+          )
+          .toList(),
+      'reportText': OutputFormatter.doctorReport(report),
+      'hasErrors': report.findings
+          .any((finding) => finding.severity == FindingSeverity.error),
+    };
+  }
+
+  Map<String, Object?> queryGraph({
+    String? nodeType,
+    String? feature,
+    String? nameContains,
+    int? limit,
+    int? offset,
+    String? overrideRoot,
+    String? cwd,
+  }) {
+    final graph = _loadGraph(resolveRoot(overrideRoot: overrideRoot, cwd: cwd));
+    try {
+      return _graphQuery.query(
+        graph,
+        nodeType: nodeType,
+        feature: feature,
+        nameContains: nameContains,
+        limit: limit ?? GraphQuery.defaultLimit,
+        offset: offset ?? 0,
+      );
+    } on ArgumentError catch (e) {
+      throw McpProjectException(e.message.toString());
+    }
+  }
+
+  String readGraphJson({String? overrideRoot, String? cwd}) {
+    final root = resolveRoot(overrideRoot: overrideRoot, cwd: cwd);
+    final paths = ProjectPaths(root);
+    final graphFile = File(paths.projectGraph);
+
+    if (!graphFile.existsSync()) {
+      throw McpProjectException(
+        'project_graph.json not found. Run `flutter_ai_context scan` first.',
+      );
+    }
+
+    final graph = _loadGraph(root);
+    final fileBytes = graphFile.lengthSync();
+
+    if (fileBytes > maxFullGraphBytes) {
+      return encodeJson({
+        'truncated': true,
+        ..._graphQuery.summarize(graph, fileBytes: fileBytes),
+      });
+    }
+
+    return graphFile.readAsStringSync();
   }
 
   List<Map<String, Object?>> listFeatures({

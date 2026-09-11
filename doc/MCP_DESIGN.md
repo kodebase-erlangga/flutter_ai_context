@@ -263,10 +263,10 @@ Alias pendek `mcp` bisa ditambahkan later.
 
 ### Phase 2 — Mutating + graph
 
-- [ ] `sync_context` tool
-- [ ] `run_doctor` tool
-- [ ] Resource `graph` (with size guard / pagination for large projects)
-- [ ] `query_graph` tool (filter by `NodeType`, feature name)
+- [x] `sync_context` tool
+- [x] `run_doctor` tool
+- [x] Resource `graph` (with size guard / pagination for large projects)
+- [x] `query_graph` tool (filter by `NodeType`, feature name)
 
 ### Phase 3 — 1.0 polish
 
