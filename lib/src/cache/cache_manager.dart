@@ -68,6 +68,10 @@ class CacheManager {
 
   ProjectGraph? loadGraph() => _graphStore.load();
 
+  bool get schemaMismatch => _graphStore.schemaMismatch;
+
+  int? get cachedSchemaVersion => _graphStore.cachedSchemaVersion;
+
   void saveGraph(ProjectGraph graph) => _graphStore.save(graph);
 
   void saveHashes() => _hashStore.save();

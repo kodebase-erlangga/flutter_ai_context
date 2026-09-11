@@ -32,7 +32,10 @@ void main() {
       logger: _CapturingLogger(output),
     ).run(root);
 
-    expect(output.toString(), contains('Files analyzed: ${metadata.filesAnalyzed}'));
+    expect(
+      output.toString(),
+      contains('Files indexed : ${metadata.filesAnalyzed}'),
+    );
   });
 
   test('sync with no changes preserves files analyzed count', () async {

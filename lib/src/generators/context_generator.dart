@@ -13,6 +13,7 @@ import '../scanner/detectors/route_detector.dart';
 import '../shared/paths.dart';
 import 'agents_md_generator.dart';
 import 'architecture_md_generator.dart';
+import 'cursor_rule_generator.dart';
 import 'project_md_generator.dart';
 import 'routes_md_generator.dart';
 
@@ -22,15 +23,18 @@ class ContextGenerator {
     ProjectMdGenerator? projectMd,
     ArchitectureMdGenerator? architectureMd,
     AgentsMdGenerator? agentsMd,
+    CursorRuleGenerator? cursorRule,
     RoutesMdGenerator? routesMd,
   })  : _projectMd = projectMd ?? ProjectMdGenerator(),
         _architectureMd = architectureMd ?? ArchitectureMdGenerator(),
         _agentsMd = agentsMd ?? AgentsMdGenerator(),
+        _cursorRule = cursorRule ?? CursorRuleGenerator(),
         _routesMd = routesMd ?? RoutesMdGenerator();
 
   final ProjectMdGenerator _projectMd;
   final ArchitectureMdGenerator _architectureMd;
   final AgentsMdGenerator _agentsMd;
+  final CursorRuleGenerator _cursorRule;
   final RoutesMdGenerator _routesMd;
 
   void generateAll({
@@ -83,6 +87,18 @@ class ContextGenerator {
           declaredStateManagement:
               config.stateManagement != 'auto' ? config.stateManagement : null,
           interpretation: interpretation,
+        ),
+      );
+    }
+
+    if (config.generateCursorRule) {
+      _write(
+        paths.cursorRuleFile,
+        _cursorRule.generate(
+          projectName: discovery.projectName,
+          primaryStateManagement: config.stateManagement != 'auto'
+              ? config.stateManagement
+              : stateManagement.primary,
         ),
       );
     }

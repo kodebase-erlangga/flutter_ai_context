@@ -47,6 +47,14 @@ class ScanCommand {
       );
     }
 
+    if (_logger.level != LogLevel.quiet) {
+      _logger.blank();
+      _logger.info('Context       : FRESH');
+      _logger.info(
+        'For day-to-day updates after edits, prefer `flutter_ai_context sync`.',
+      );
+    }
+
     return 0;
   }
 }

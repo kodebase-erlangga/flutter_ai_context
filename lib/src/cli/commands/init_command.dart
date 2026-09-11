@@ -87,6 +87,19 @@ class InitCommand {
 
     _logger.blank();
     _logger.info('AI context initialized successfully.');
+    if (config.generateCursorRule) {
+      _logger.success('Created .cursor/rules/flutter-ai-context.mdc');
+    }
+    _logger.blank();
+    _logger.info('Next steps:');
+    _logger.info('  flutter_ai_context status   # check FRESH / STALE');
+    _logger.info('  flutter_ai_context sync       # update after code changes');
+    _logger.info('  flutter_ai_context doctor     # architecture check');
+    _logger.info('  flutter_ai_context context <feature>');
+    _logger.blank();
+    _logger.info(
+      'Day-to-day workflow: `sync` after edits. Reserve `scan` for full rebuilds.',
+    );
     return 0;
   }
 

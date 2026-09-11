@@ -30,7 +30,12 @@ class ConfigLoader {
   void writeDefault(String configPath, ProjectConfig config) {
     final buffer = StringBuffer();
     buffer.writeln('# flutter_ai_context configuration');
-    buffer.writeln('# Run `flutter_ai_context scan` to analyze your project.');
+    buffer.writeln(
+      '# Day-to-day: `flutter_ai_context sync` (incremental).',
+    );
+    buffer.writeln(
+      '# Full rebuild: `flutter_ai_context scan` (schema upgrade / major refactor).',
+    );
     buffer.writeln();
     _writeYamlMap(buffer, config.toYamlMap(), 0);
     File(configPath).writeAsStringSync(buffer.toString());

@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.6.0
+
+### Added
+- Graph-based hybrid state management detection (architectural nodes outweigh Consumer/context.read signals)
+- Frozen graph schema v1 contract: [doc/GRAPH_SCHEMA_v1.md](doc/GRAPH_SCHEMA_v1.md)
+- Cursor onboarding rule: `.cursor/rules/flutter-ai-context.mdc` on init (`context.generate_cursor_rule`)
+- `sync` + `status FRESH/STALE` as the documented default workflow
+
+### Improved
+- `sync` and `status` report context freshness, changed file counts, and schema version
+- `init` prints next-step workflow (`sync` after edits, `scan` for full rebuilds)
+- Schema mismatch on cache load triggers rebuild with a clear message
+- Graph-first primary SM with DI-layer detection (GetX architecture + Provider widget signals)
+- Human-readable docs: [doc/architecture.md](doc/architecture.md), [doc/GRAPH_SCHEMA_v1.md](doc/GRAPH_SCHEMA_v1.md)
+
 ## 0.5.3
 
 ### Improved

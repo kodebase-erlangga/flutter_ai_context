@@ -10,7 +10,7 @@ import 'commands/status_command.dart';
 import 'commands/sync_command.dart';
 
 /// CLI version.
-const cliVersion = '0.5.3';
+const cliVersion = '0.6.0';
 
 /// Main CLI runner.
 class CliRunner {
@@ -114,9 +114,9 @@ class CliRunner {
     _logger.blank();
     _logger.info('Commands:');
     _logger.info('  init      Initialize AI context for this project');
-    _logger.info('  scan      Full project analysis');
-    _logger.info('  sync      Incremental update');
-    _logger.info('  status    Check context freshness');
+    _logger.info('  sync      Incremental update (default day-to-day workflow)');
+    _logger.info('  status    Check whether context is FRESH or STALE');
+    _logger.info('  scan      Full project re-analysis');
     _logger.info('  doctor    Architecture consistency check');
     _logger.info('  context   Generate focused context pack (--list)');
     _logger.blank();

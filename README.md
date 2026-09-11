@@ -22,6 +22,23 @@
 
 ## Installation
 
+### Option A — dev dependency (recommended for teams)
+
+```yaml
+# pubspec.yaml
+dev_dependencies:
+  flutter_ai_context: ^0.6.0
+```
+
+```bash
+dart pub get
+dart run flutter_ai_context init
+dart run flutter_ai_context sync    # day-to-day after edits
+dart run flutter_ai_context status    # FRESH / STALE
+```
+
+### Option B — global CLI
+
 ```bash
 dart pub global activate flutter_ai_context
 ```
@@ -31,10 +48,7 @@ Add pub cache bin to your PATH:
 - **macOS/Linux:** `$HOME/.pub-cache/bin`
 - **Windows:** `%LOCALAPPDATA%\Pub\Cache\bin`
 
-Or run without global install:
-
 ```bash
-dart pub global activate --source path .
 flutter_ai_context init
 ```
 
@@ -42,10 +56,14 @@ flutter_ai_context init
 
 ```bash
 cd your_flutter_project
-flutter_ai_context init
-flutter_ai_context doctor
-flutter_ai_context context auth
+dart run flutter_ai_context init      # or: flutter_ai_context init
+dart run flutter_ai_context doctor
+dart run flutter_ai_context context auth
+# after code changes:
+dart run flutter_ai_context sync
 ```
+
+`init` creates `AGENTS.md`, `.ai/`, and `.cursor/rules/flutter-ai-context.mdc` (Cursor onboarding).
 
 ### Example output (`init`)
 
@@ -97,9 +115,9 @@ Canonical architecture reference:
 | Command | Description |
 |---------|-------------|
 | `init` | Initial discovery, config, and first context generation |
-| `scan` | Full project re-analysis |
-| `sync` | Incremental update for changed files |
-| `status` | Check whether context is fresh or stale |
+| `sync` | **Default workflow** — incremental update for changed files |
+| `status` | Check whether context is **FRESH** or **STALE** |
+| `scan` | Full project re-analysis (schema upgrade / major refactor) |
 | `doctor` | Compare code against declared rules and dominant patterns |
 | `context <scope>` | Generate focused context pack for a feature |
 
@@ -111,6 +129,7 @@ Global flags: `--verbose`, `--quiet`, `--version`, `--help`
 project/
 ├── flutter_ai_context.yaml
 ├── AGENTS.md
+├── .cursor/rules/flutter-ai-context.mdc
 └── .ai/
     ├── project.md
     ├── architecture.md
@@ -169,6 +188,7 @@ scan:
 context:
   output: .ai
   generate_agents_md: true
+  generate_cursor_rule: true
 
 rules:
   architecture:
@@ -191,7 +211,17 @@ rules:
 
 All analysis runs locally. No source code is uploaded. Secret-like strings are redacted from generated output.
 
-## Limitations (v0.5.2)
+## Documentation
+
+| Doc | For |
+|-----|-----|
+| [doc/architecture.md](doc/architecture.md) | How the pipeline works (human-readable) |
+| [doc/GRAPH_SCHEMA_v1.md](doc/GRAPH_SCHEMA_v1.md) | Graph JSON contract, node/edge types, versioning |
+| [doc/MCP_DESIGN.md](doc/MCP_DESIGN.md) | MCP server design for 1.0 (draft) |
+
+Graph schema **v1** is frozen for the 1.0 track. You can open `.ai/cache/project_graph.json` after `init` — the schema doc explains how to read it.
+
+## Limitations (v0.6.0)
 
 - Semantic resolution uses parse-once caching with selective lazy resolution and Element2 fragment fallback when the SDK context is incomplete.
 - `*Page` / `pages/` widgets are treated as screens; GetX hybrid `ChangeNotifier` controllers in `controllers/` paths are detected as GetX.
@@ -200,7 +230,8 @@ All analysis runs locally. No source code is uploaded. Secret-like strings are r
 - Context packs use feature-scoped graph ranking, class signatures, and a configurable token budget (`context.token_budget`).
 - Doctor info findings are shown separately and do not reduce the readiness score; warnings still do.
 - Doctor rules are expanding but not a replacement for `flutter analyze` or custom linters.
-- **Pre-1.0 API** — graph schema and CLI output may change before `1.0.0`.
+- Graph schema v1 is stable; breaking graph changes require a major version bump.
+- CLI/MCP integrations may still evolve before `1.0.0`.
 
 ## Development
 
@@ -214,8 +245,8 @@ dart run bin/flutter_ai_context.dart --help
 
 ## Roadmap
 
-- `1.0.0` — stable schema/CLI contracts, MCP server prototype
-- Future: MCP server consuming the same Project Knowledge Model
+- `1.0.0` — stable schema/CLI contracts, MCP server prototype ([design draft](doc/MCP_DESIGN.md))
+- Future: MCP tools for `get_context`, `project_status`, `sync_context`
 
 ## Release Notes
 

@@ -18,6 +18,7 @@ class ProjectConfig {
     ],
     this.contextOutput = '.ai',
     this.generateAgentsMd = true,
+    this.generateCursorRule = true,
     this.contextTokenBudget = 2000,
     this.directHttpFromUi = 'auto',
     this.preferredScreenSuffix,
@@ -48,6 +49,9 @@ class ProjectConfig {
 
   /// Whether to emit `AGENTS.md` at the project root.
   final bool generateAgentsMd;
+
+  /// Whether to emit `.cursor/rules/flutter-ai-context.mdc` on init/scan.
+  final bool generateCursorRule;
 
   /// Token budget for per-feature context packs.
   final int contextTokenBudget;
@@ -80,6 +84,7 @@ class ProjectConfig {
       'context': {
         'output': contextOutput,
         'generate_agents_md': generateAgentsMd,
+        'generate_cursor_rule': generateCursorRule,
         'token_budget': contextTokenBudget,
       },
       'rules': {
@@ -123,6 +128,7 @@ class ProjectConfig {
           ],
       contextOutput: context['output'] as String? ?? '.ai',
       generateAgentsMd: context['generate_agents_md'] as bool? ?? true,
+      generateCursorRule: context['generate_cursor_rule'] as bool? ?? true,
       contextTokenBudget: _asInt(context['token_budget']) ?? 2000,
       directHttpFromUi: archRules['direct_http_from_ui'] as String? ?? 'auto',
       preferredScreenSuffix: namingRules['screen_suffix'] as String?,

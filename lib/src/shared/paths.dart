@@ -9,6 +9,9 @@ class ProjectPaths {
   String get configFile => p.join(root, 'flutter_ai_context.yaml');
   String get pubspecFile => p.join(root, 'pubspec.yaml');
   String get agentsMd => p.join(root, 'AGENTS.md');
+  String get cursorRulesDir => p.join(root, '.cursor', 'rules');
+  String get cursorRuleFile =>
+      p.join(cursorRulesDir, 'flutter-ai-context.mdc');
   String get aiDir => p.join(root, '.ai');
   String get cacheDir => p.join(aiDir, 'cache');
   String get contextDir => p.join(aiDir, 'context');

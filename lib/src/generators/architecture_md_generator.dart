@@ -27,10 +27,13 @@ class ArchitectureMdGenerator {
     for (final entry in stateManagement.distribution.entries) {
       buffer.writeln('- ${entry.key}: ${entry.value.toStringAsFixed(0)}%');
     }
-    if (stateManagement.secondary != null) {
+    if (stateManagement.hybridNote != null) {
+      buffer.writeln();
+      buffer.writeln(stateManagement.hybridNote);
+    } else if (stateManagement.secondary != null) {
       buffer.writeln();
       buffer.writeln(
-        'Secondary/legacy pattern: **${stateManagement.secondary}**',
+        'Secondary pattern: **${stateManagement.secondary}**',
       );
     }
     buffer.writeln();

@@ -11,7 +11,8 @@
 - Provider: 100%
 
 Evidence:
-- N Provider indicators
+- 2 Provider architectural nodes
+- 9 Provider usage signals
 - Provider dependency installed
 
 ### Dominant Flows

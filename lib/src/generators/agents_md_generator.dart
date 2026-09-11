@@ -19,8 +19,13 @@ class AgentsMdGenerator {
     buffer.writeln('This project uses Flutter.');
     buffer.writeln();
     buffer.writeln('Primary state management:');
-    buffer.writeln(
-        declaredStateManagement ?? stateManagement.primary ?? 'Unknown');
+    if (declaredStateManagement != null) {
+      buffer.writeln(declaredStateManagement);
+    } else if (stateManagement.hybridNote != null) {
+      buffer.writeln(stateManagement.hybridNote);
+    } else {
+      buffer.writeln(stateManagement.primary ?? 'Unknown');
+    }
     buffer.writeln();
     buffer.writeln('Observed architecture:');
     if (architecture.dominantFlow != null) {

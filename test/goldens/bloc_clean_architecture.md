@@ -11,7 +11,8 @@
 - Bloc: 100%
 
 Evidence:
-- N Bloc indicators
+- 1 Bloc architectural nodes
+- 4 Bloc usage signals
 - Bloc dependency installed
 - Bloc dependency installed
 
