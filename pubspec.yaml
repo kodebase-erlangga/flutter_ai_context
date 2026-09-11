@@ -2,7 +2,7 @@ name: flutter_ai_context
 description: >-
   A local-first project intelligence layer for Flutter codebases.
   Give AI a real understanding of your Flutter project.
-version: 0.6.0
+version: 0.7.0
 repository: https://github.com/kodebase-erlangga/flutter_ai_context
 issue_tracker: https://github.com/kodebase-erlangga/flutter_ai_context/issues
 homepage: https://github.com/kodebase-erlangga/flutter_ai_context
@@ -15,9 +15,11 @@ dependencies:
   args: ^2.7.0
   collection: ^1.19.0
   crypto: ^3.0.6
+  dart_mcp: ^0.5.2
   glob: ^2.1.3
   meta: ^1.16.0
   path: ^1.9.1
+  stream_channel: ^2.1.4
   yaml: ^3.1.3
 
 dev_dependencies:

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.0
+
+### Added
+- MCP server (Phase 1): `flutter_ai_context mcp` over stdio
+- MCP tools: `project_status`, `list_features`, `get_context`
+- MCP resources: `flutter-ai-context://agents`, `architecture`, `context/{scope}`
+
 ## 0.6.0
 
 ### Added

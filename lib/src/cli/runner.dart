@@ -7,10 +7,11 @@ import 'commands/doctor_command.dart';
 import 'commands/init_command.dart';
 import 'commands/scan_command.dart';
 import 'commands/status_command.dart';
+import 'commands/mcp_command.dart';
 import 'commands/sync_command.dart';
 
 /// CLI version.
-const cliVersion = '0.6.0';
+const cliVersion = '0.7.0';
 
 /// Main CLI runner.
 class CliRunner {
@@ -35,6 +36,12 @@ class CliRunner {
           ..addFlag('help', negatable: false)
           ..addFlag('list', negatable: false, help: 'List available scopes.')
           ..addOption('scope', help: 'Feature or scope name.'),
+      )
+      ..addCommand(
+        'mcp',
+        ArgParser()
+          ..addFlag('help', negatable: false)
+          ..addOption('root', help: 'Flutter project root directory.'),
       );
   }
 
@@ -92,6 +99,10 @@ class CliRunner {
             return 64;
           }
           return ContextCommand(logger: _logger).run(root, scope);
+        case 'mcp':
+          return await McpCommand().run(
+            root: command['root'] as String? ?? root,
+          );
         default:
           _logger.error('Unknown command: ${command.name}');
           return 64;
@@ -119,6 +130,7 @@ class CliRunner {
     _logger.info('  scan      Full project re-analysis');
     _logger.info('  doctor    Architecture consistency check');
     _logger.info('  context   Generate focused context pack (--list)');
+    _logger.info('  mcp       Start MCP server (stdio) for AI clients');
     _logger.blank();
     _logger.info('Global options:');
     _logger.info(parser.usage);

@@ -27,7 +27,7 @@
 ```yaml
 # pubspec.yaml
 dev_dependencies:
-  flutter_ai_context: ^0.6.0
+  flutter_ai_context: ^0.7.0
 ```
 
 ```bash
@@ -64,6 +64,36 @@ dart run flutter_ai_context sync
 ```
 
 `init` creates `AGENTS.md`, `.ai/`, and `.cursor/rules/flutter-ai-context.mdc` (Cursor onboarding).
+
+## MCP Server (Cursor / Claude Desktop)
+
+After `init`, expose project context to AI clients over stdio:
+
+```bash
+dart run flutter_ai_context mcp
+```
+
+**Cursor** — add to `.cursor/mcp.json` (or global MCP settings):
+
+```json
+{
+  "mcpServers": {
+    "flutter-ai-context": {
+      "command": "dart",
+      "args": ["run", "flutter_ai_context:mcp"],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "FLUTTER_AI_CONTEXT_ROOT": "${workspaceFolder}"
+      }
+    }
+  }
+}
+```
+
+**Tools:** `project_status`, `list_features`, `get_context`  
+**Resources:** `flutter-ai-context://agents`, `architecture`, `context/{scope}`
+
+See [doc/MCP_DESIGN.md](doc/MCP_DESIGN.md) for the full roadmap.
 
 ### Example output (`init`)
 
@@ -120,6 +150,7 @@ Canonical architecture reference:
 | `scan` | Full project re-analysis (schema upgrade / major refactor) |
 | `doctor` | Compare code against declared rules and dominant patterns |
 | `context <scope>` | Generate focused context pack for a feature |
+| `mcp` | Start stdio MCP server for AI clients |
 
 Global flags: `--verbose`, `--quiet`, `--version`, `--help`
 

@@ -255,11 +255,11 @@ Alias pendek `mcp` bisa ditambahkan later.
 
 ### Phase 1 — Read-only prototype
 
-- [ ] `bin/flutter_ai_context_mcp.dart` stdio server
-- [ ] Tools: `project_status`, `list_features`, `get_context`
-- [ ] Resources: `agents`, `architecture`, `context/{scope}`
-- [ ] Integration test with mock MCP client
-- [ ] Doc: setup di README
+- [x] `flutter_ai_context mcp` stdio server (subcommand)
+- [x] Tools: `project_status`, `list_features`, `get_context`
+- [x] Resources: `agents`, `architecture`, `context/{scope}`
+- [x] Integration test with in-memory MCP client
+- [x] Doc: setup di README
 
 ### Phase 2 — Mutating + graph
 
