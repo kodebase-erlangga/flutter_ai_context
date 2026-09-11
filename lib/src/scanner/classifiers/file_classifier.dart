@@ -39,11 +39,26 @@ class FileClassifier {
 
     if (_isScreen(className, superClass, hasBuildMethod, filePath, evidence)) {
       nodeType = NodeType.screen;
-    } else if (_isGetxController(className, superClass, imports, evidence)) {
+    } else if (_isGetxController(
+      className,
+      superClass,
+      imports,
+      filePath,
+      evidence,
+    )) {
       nodeType = NodeType.notifier;
       smFramework = 'getx';
+    } else if (_isGetxBinding(className, superClass, filePath, imports, evidence)) {
+      nodeType = NodeType.classNode;
+      smFramework = 'getx';
     } else if (_isProvider(
-        className, superClass, methodNames, filePath, evidence)) {
+      className,
+      superClass,
+      methodNames,
+      filePath,
+      evidence,
+      imports: imports,
+    )) {
       nodeType = NodeType.provider;
     } else if (_isBloc(className, superClass, imports, evidence)) {
       nodeType = NodeType.bloc;
@@ -86,9 +101,12 @@ class FileClassifier {
     final featureMatch = RegExp(r'features/([^/]+)/').firstMatch(filePath);
     if (featureMatch != null) return _titleCase(featureMatch.group(1)!);
 
+    final moduleMatch = RegExp(r'modules/([^/]+)/').firstMatch(filePath);
+    if (moduleMatch != null) return _titleCase(moduleMatch.group(1)!);
+
     final baseName = className.replaceAll(
         RegExp(
-            r'(Screen|Provider|Service|Repository|Model|Bloc|Cubit|Notifier)$'),
+            r'(Screen|Page|Provider|Controller|Service|Repository|Model|Bloc|Cubit|Notifier)$'),
         '');
     if (baseName.isNotEmpty && baseName != className) {
       return baseName;
@@ -107,15 +125,18 @@ class FileClassifier {
     List<Evidence> evidence,
   ) {
     var score = 0;
-    if (className.endsWith('Screen')) {
+    if (className.endsWith('Screen') || className.endsWith('Page')) {
       score++;
       evidence.add(const Evidence(
-          description: 'class name ends with Screen', weight: 1.5));
+          description: 'class name ends with Screen/Page', weight: 1.5));
     }
-    if (filePath.contains('_screen.dart') || filePath.contains('/screens/')) {
+    if (filePath.contains('_screen.dart') ||
+        filePath.contains('/screens/') ||
+        filePath.contains('_page.dart') ||
+        filePath.contains('/pages/')) {
       score++;
-      evidence.add(
-          const Evidence(description: 'located in screens path', weight: 1.2));
+      evidence.add(const Evidence(
+          description: 'located in screens/pages path', weight: 1.2));
     }
     if (superClass != null &&
         (superClass.contains('StatefulWidget') ||
@@ -135,8 +156,15 @@ class FileClassifier {
     String? superClass,
     List<String> methods,
     String filePath,
-    List<Evidence> evidence,
-  ) {
+    List<Evidence> evidence, {
+    List<String> imports = const [],
+  }) {
+    if (className.endsWith('Controller') &&
+        (filePath.contains('/controllers/') ||
+            filePath.contains('_controller.dart'))) {
+      return false;
+    }
+
     var score = 0;
     if (superClass != null && superClass.contains('ChangeNotifier')) {
       score += 2;
@@ -194,6 +222,7 @@ class FileClassifier {
     String className,
     String? superClass,
     List<String> imports,
+    String filePath,
     List<Evidence> evidence,
   ) {
     if (superClass != null &&
@@ -204,10 +233,52 @@ class FileClassifier {
       );
       return true;
     }
-    if (imports.any((i) => i.contains('package:get/')) &&
-        className.endsWith('Controller')) {
+
+    final controllerPath = filePath.contains('/controllers/') ||
+        filePath.contains('_controller.dart');
+    if (!className.endsWith('Controller')) return false;
+
+    if (imports.any((i) => i.contains('package:get/'))) {
       evidence.add(
         const Evidence(description: 'GetX controller naming', weight: 1.5),
+      );
+      return true;
+    }
+
+    if (controllerPath &&
+        superClass != null &&
+        superClass.contains('ChangeNotifier')) {
+      evidence.add(
+        const Evidence(
+          description: 'GetX hybrid ChangeNotifier controller',
+          weight: 1.8,
+        ),
+      );
+      return true;
+    }
+
+    return false;
+  }
+
+  bool _isGetxBinding(
+    String className,
+    String? superClass,
+    String filePath,
+    List<String> imports,
+    List<Evidence> evidence,
+  ) {
+    if (superClass != null && superClass.contains('Bindings')) {
+      evidence.add(
+        const Evidence(description: 'extends GetX Bindings', weight: 2.0),
+      );
+      return true;
+    }
+    if (!className.endsWith('Binding')) return false;
+    if (filePath.contains('/bindings/') ||
+        filePath.contains('_binding.dart') ||
+        imports.any((i) => i.contains('package:get/'))) {
+      evidence.add(
+        const Evidence(description: 'GetX binding class', weight: 1.5),
       );
       return true;
     }

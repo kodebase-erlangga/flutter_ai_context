@@ -20,14 +20,5 @@ Screen -> Provider -> Service
 
 - `lib/features/attendance/attendance_service.dart` — AttendanceService · getAttendance (1.08)
 - `lib/features/attendance/attendance_model.dart` — AttendanceModel · toJson (1.05)
+- `lib/core/api_client.dart` — ApiClient · get (0.80)
 
-## Other
-
-
-## Related Nodes
-
-- **AttendanceScreen** (class:lib/features/attendance/attendance_screen.dart:AttendanceScreen) — score 1.15
-- **AttendanceProvider** (class:lib/features/attendance/attendance_provider.dart:AttendanceProvider) — score 1.12
-- **AttendanceService** (class:lib/features/attendance/attendance_service.dart:AttendanceService) — score 1.08
-- **AttendanceModel** (class:lib/features/attendance/attendance_model.dart:AttendanceModel) — score 1.05
-- **Attendance** (feature:Attendance) — score 1.00

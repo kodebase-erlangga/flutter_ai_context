@@ -45,6 +45,34 @@ void main() {
         .map((node) => node.file)
         .toSet();
     expect(files.length, result.nodes.where((node) => node.file != null).length);
+    expect(
+      result.nodes.where((node) => node.file?.contains('/grade/') ?? false),
+      isEmpty,
+    );
+  });
+
+  test('context pack selected nodes match token budget output', () async {
+    await _analyze('provider_feature_first');
+    final graph = CacheManager(ProjectPaths(fixturePath('provider_feature_first')))
+        .loadGraph()!;
+    final result = RelevanceRanker().rank(graph, 'Attendance');
+
+    final pack = ContextPackGenerator().build(
+      scope: 'Attendance',
+      graph: graph,
+      ranked: result.nodes,
+      observedFlow: result.observedFlow,
+      maxTokens: 500,
+    );
+
+    final selectedFiles = pack.selectedNodes
+        .where((node) => node.file != null)
+        .map((node) => node.file!)
+        .toSet();
+    for (final file in selectedFiles) {
+      expect(pack.content, contains(file));
+    }
+    expect(selectedFiles.length, lessThanOrEqualTo(result.nodes.length));
   });
 
   test('context pack groups files and respects token budget', () async {

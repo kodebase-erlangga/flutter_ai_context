@@ -6,6 +6,17 @@ import '../graph/schema.dart';
 import '../shared/redaction.dart';
 import 'markdown_header.dart';
 
+/// Generated context pack with the nodes that fit the token budget.
+class ContextPackResult {
+  ContextPackResult({
+    required this.content,
+    required this.selectedNodes,
+  });
+
+  final String content;
+  final List<RankedNode> selectedNodes;
+}
+
 /// Generates focused context packs.
 class ContextPackGenerator {
   ContextPackGenerator({ClassSignatureFormatter? signatureFormatter})
@@ -13,7 +24,7 @@ class ContextPackGenerator {
 
   final ClassSignatureFormatter _signatureFormatter;
 
-  String generate({
+  ContextPackResult build({
     required String scope,
     required ProjectGraph graph,
     required List<RankedNode> ranked,
@@ -28,14 +39,33 @@ class ContextPackGenerator {
       maxTokens: maxTokens,
     );
 
-    return Redaction.sanitize(
-      _render(
-        scope: scope,
-        graph: graph,
-        ranked: selected,
-        observedFlow: observedFlow,
+    return ContextPackResult(
+      content: Redaction.sanitize(
+        _render(
+          scope: scope,
+          graph: graph,
+          ranked: selected,
+          observedFlow: observedFlow,
+        ),
       ),
+      selectedNodes: selected,
     );
+  }
+
+  String generate({
+    required String scope,
+    required ProjectGraph graph,
+    required List<RankedNode> ranked,
+    String? observedFlow,
+    int? maxTokens,
+  }) {
+    return build(
+      scope: scope,
+      graph: graph,
+      ranked: ranked,
+      observedFlow: observedFlow,
+      maxTokens: maxTokens,
+    ).content;
   }
 
   String _render({
@@ -54,18 +84,39 @@ class ContextPackGenerator {
       buffer.writeln();
     }
 
-    _writeGroup(buffer, graph, 'Screens', ranked, _isScreen);
-    _writeGroup(buffer, graph, 'State Management', ranked, _isState);
-    _writeGroup(buffer, graph, 'Data Layer', ranked, _isData);
-    _writeGroup(buffer, graph, 'Routes', ranked, _isRoute);
-    _writeGroup(buffer, graph, 'Other', ranked, _isOther);
+    final groupedIds = <String>{};
+    _writeGroup(
+      buffer,
+      graph,
+      'Screens',
+      ranked,
+      _isScreen,
+      groupedIds,
+    );
+    _writeGroup(
+      buffer,
+      graph,
+      'State Management',
+      ranked,
+      _isState,
+      groupedIds,
+    );
+    _writeGroup(buffer, graph, 'Data Layer', ranked, _isData, groupedIds);
+    _writeGroup(buffer, graph, 'Routes', ranked, _isRoute, groupedIds);
+    _writeGroup(buffer, graph, 'Other', ranked, _isOther, groupedIds);
 
-    buffer.writeln('## Related Nodes');
-    buffer.writeln();
-    for (final node in ranked) {
-      buffer.writeln(
-        '- **${node.name}** (${node.id}) — score ${node.score.toStringAsFixed(2)}',
-      );
+    final related = ranked
+        .where((node) => !groupedIds.contains(node.id))
+        .toList();
+    if (related.isNotEmpty) {
+      buffer.writeln('## Related Nodes');
+      buffer.writeln();
+      for (final node in related) {
+        buffer.writeln(
+          '- **${node.name}** (${node.id}) — score ${node.score.toStringAsFixed(2)}',
+        );
+      }
+      buffer.writeln();
     }
 
     return buffer.toString();
@@ -80,18 +131,70 @@ class ContextPackGenerator {
   }) {
     if (maxTokens == null) return ranked;
 
+    var tokens = _baseTokens(scope, observedFlow);
     final selected = <RankedNode>[];
+    final activeGroups = <String>{};
+    final groupedIds = <String>{};
+
     for (final node in ranked) {
-      final preview = _render(
-        scope: scope,
+      final nodeTokens = _estimateNodeTokens(
+        node: node,
         graph: graph,
-        ranked: [...selected, node],
-        observedFlow: observedFlow,
+        activeGroups: activeGroups,
+        groupedIds: groupedIds,
       );
-      if (TokenEstimator.estimate(preview) > maxTokens) break;
+      if (tokens + nodeTokens > maxTokens) break;
+      tokens += nodeTokens;
       selected.add(node);
     }
+
     return selected;
+  }
+
+  int _baseTokens(String scope, String? observedFlow) {
+    var tokens = TokenEstimator.estimate(MarkdownHeader.title('Context: $scope'));
+    if (observedFlow != null) {
+      tokens += TokenEstimator.estimate('## Observed Flow\n\n$observedFlow\n\n');
+    }
+    return tokens;
+  }
+
+  int _estimateNodeTokens({
+    required RankedNode node,
+    required ProjectGraph graph,
+    required Set<String> activeGroups,
+    required Set<String> groupedIds,
+  }) {
+    final type = node.type;
+    String? group;
+    if (node.file != null && _isScreen(type)) {
+      group = 'Screens';
+    } else if (node.file != null && _isState(type)) {
+      group = 'State Management';
+    } else if (node.file != null && _isData(type)) {
+      group = 'Data Layer';
+    } else if (node.file != null && _isRoute(type)) {
+      group = 'Routes';
+    } else if (node.file != null && _isOther(type)) {
+      group = 'Other';
+    }
+
+    if (group != null) {
+      groupedIds.add(node.id);
+      var tokens = 0;
+      if (activeGroups.add(group)) {
+        tokens += TokenEstimator.estimate('## $group\n\n');
+      }
+      final signature = _signatureFormatter.format(graph, node) ?? node.name;
+      tokens += TokenEstimator.estimate(
+        '- `${node.file}` — $signature (${node.score.toStringAsFixed(2)})\n\n',
+      );
+      return tokens;
+    }
+
+    return TokenEstimator.estimate(
+      '## Related Nodes\n\n- **${node.name}** (${node.id}) — score ${node.score.toStringAsFixed(2)}\n\n',
+    );
   }
 
   void _writeGroup(
@@ -100,6 +203,7 @@ class ContextPackGenerator {
     String title,
     List<RankedNode> nodes,
     bool Function(NodeType?) predicate,
+    Set<String> groupedIds,
   ) {
     final group = nodes.where((node) => predicate(node.type)).toList();
     if (group.isEmpty) return;
@@ -108,6 +212,7 @@ class ContextPackGenerator {
     buffer.writeln();
     for (final node in group) {
       if (node.file == null) continue;
+      groupedIds.add(node.id);
       final signature = _signatureFormatter.format(graph, node);
       final details = signature ?? node.name;
       buffer.writeln(

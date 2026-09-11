@@ -10,7 +10,7 @@ import 'commands/status_command.dart';
 import 'commands/sync_command.dart';
 
 /// CLI version.
-const cliVersion = '0.5.0';
+const cliVersion = '0.5.2';
 
 /// Main CLI runner.
 class CliRunner {
@@ -69,15 +69,15 @@ class CliRunner {
 
       switch (command.name) {
         case 'init':
-          return InitCommand(logger: _logger).run(root);
+          return await InitCommand(logger: _logger).run(root);
         case 'scan':
-          return ScanCommand(logger: _logger).run(root);
+          return await ScanCommand(logger: _logger).run(root);
         case 'sync':
-          return SyncCommand(logger: _logger).run(root);
+          return await SyncCommand(logger: _logger).run(root);
         case 'status':
           return StatusCommand(logger: _logger).run(root);
         case 'doctor':
-          return DoctorCommand(logger: _logger).run(root);
+          return await DoctorCommand(logger: _logger).run(root);
         case 'context':
           if (command.flag('list')) {
             return ContextCommand(logger: _logger).listScopes(root);

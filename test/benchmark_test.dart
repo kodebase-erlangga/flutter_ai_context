@@ -24,6 +24,26 @@ void main() {
     expect(stopwatch.elapsedMilliseconds, lessThan(30000));
   });
 
+  test('getx_pages scans within benchmark budget', () async {
+    final root = fixturePath('getx_pages');
+    final paths = ProjectPaths(root);
+    final cache = CacheManager(paths);
+
+    final stopwatch = Stopwatch()..start();
+    final result = await AnalysisPipeline().run(
+      root: root,
+      config: ProjectConfig(projectName: 'getx_pages'),
+      paths: paths,
+      cache: cache,
+    );
+    stopwatch.stop();
+
+    expect(stopwatch.elapsedMilliseconds, lessThan(30000));
+    expect(result.scanResult.filesAnalyzed, 24);
+    expect(result.features.length, greaterThanOrEqualTo(8));
+    expect(result.stateManagement.primary?.toLowerCase(), contains('getx'));
+  });
+
   test('mixed_legacy scans within benchmark budget', () async {
     final root = fixturePath('mixed_legacy');
     final paths = ProjectPaths(root);

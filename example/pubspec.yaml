@@ -1,0 +1,10 @@
+name: flutter_ai_context_example
+description: Example usage of the flutter_ai_context library API.
+publish_to: none
+
+environment:
+  sdk: ^3.5.0
+
+dependencies:
+  flutter_ai_context:
+    path: ../

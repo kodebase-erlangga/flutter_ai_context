@@ -78,7 +78,7 @@ class ContextCommand {
     }
 
     final generator = ContextPackGenerator();
-    final content = generator.generate(
+    final pack = generator.build(
       scope: scope,
       graph: graph,
       ranked: result.nodes,
@@ -88,13 +88,13 @@ class ContextCommand {
 
     final outputPath = paths.contextFile(scope.toLowerCase());
     File(outputPath).parent.createSync(recursive: true);
-    File(outputPath).writeAsStringSync(content);
+    File(outputPath).writeAsStringSync(pack.content);
 
-    final tokens = generator.estimateTokens(content);
+    final tokens = generator.estimateTokens(pack.content);
     _logger.info('Context generated: $scope');
     _logger.blank();
     _logger.info('Relevant files:');
-    for (final node in result.nodes.where((n) => n.file != null)) {
+    for (final node in pack.selectedNodes.where((n) => n.file != null)) {
       _logger.info('- ${node.file!.split('/').last}');
     }
     if (result.observedFlow != null) {

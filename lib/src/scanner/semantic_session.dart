@@ -9,17 +9,19 @@ import 'package:path/path.dart' as p;
 
 import '../shared/logger.dart';
 
-/// Wraps [AnalysisContextCollection] with lazy per-file resolution.
+/// Wraps [AnalysisContextCollection] with parse-once caching and lazy resolution.
 class SemanticSession {
   SemanticSession({Logger? logger}) : _logger = logger ?? Logger();
 
   final Logger _logger;
+  final Map<String, CompilationUnit> _parsedUnits = {};
   final Map<String, ResolvedUnitResult> _resolvedUnits = {};
   AnalysisContextCollection? _collection;
   String? _projectRoot;
 
   /// Prepares semantic context without resolving every file upfront.
   Future<void> load(String projectRoot) async {
+    _parsedUnits.clear();
     _resolvedUnits.clear();
     _projectRoot = p.normalize(projectRoot);
     _collection = null;
@@ -37,6 +39,18 @@ class SemanticSession {
 
   bool get hasCollection => _collection != null;
 
+  /// Reads and parses a Dart file once, caching the AST.
+  CompilationUnit readUnit(String absolutePath) {
+    final normalized = p.normalize(absolutePath);
+    final cached = _parsedUnits[normalized];
+    if (cached != null) return cached;
+
+    final content = File(normalized).readAsStringSync();
+    final unit = parseString(content: content, path: normalized).unit;
+    _parsedUnits[normalized] = unit;
+    return unit;
+  }
+
   /// Lazily resolves a single Dart unit when semantic context is available.
   Future<void> ensureResolved(String absolutePath) async {
     final normalized = p.normalize(absolutePath);
@@ -49,6 +63,7 @@ class SemanticSession {
         final result = await context.currentSession.getResolvedUnit(normalized);
         if (result is ResolvedUnitResult) {
           _resolvedUnits[normalized] = result;
+          _parsedUnits[normalized] = result.unit;
           return;
         }
       } catch (e) {
@@ -57,12 +72,40 @@ class SemanticSession {
     }
   }
 
+  /// Resolves [paths] with bounded concurrency.
+  Future<void> ensureResolvedBatch(
+    List<String> absolutePaths, {
+    int concurrency = 6,
+  }) async {
+    if (absolutePaths.isEmpty || _collection == null) return;
+
+    for (var index = 0; index < absolutePaths.length; index += concurrency) {
+      final batch = absolutePaths
+          .skip(index)
+          .take(concurrency)
+          .where((path) => !_resolvedUnits.containsKey(p.normalize(path)))
+          .toList();
+      if (batch.isEmpty) continue;
+      await Future.wait(batch.map(ensureResolved));
+    }
+  }
+
   /// Returns compilation unit with semantic info when available.
-  CompilationUnit getUnit(String absolutePath, String content) {
+  CompilationUnit getUnit(String absolutePath, [String? content]) {
     final normalized = p.normalize(absolutePath);
     final resolved = _resolvedUnits[normalized];
     if (resolved != null) return resolved.unit;
-    return parseString(content: content, path: normalized).unit;
+
+    final parsed = _parsedUnits[normalized];
+    if (parsed != null) return parsed;
+
+    if (content != null) {
+      final unit = parseString(content: content, path: normalized).unit;
+      _parsedUnits[normalized] = unit;
+      return unit;
+    }
+
+    return readUnit(normalized);
   }
 
   /// Whether this file was semantically resolved.
@@ -75,24 +118,6 @@ class SemanticSession {
     final astSuper = node.extendsClause?.superclass.toString();
     final fromFragment = _resolveSuperTypeFromFragment(node);
     if (fromFragment != null) return fromFragment;
-
-    try {
-      // ignore: deprecated_member_use
-      final element = node.declaredElement;
-      if (element != null) {
-        // ignore: deprecated_member_use
-        final supertype = element.supertype;
-        if (supertype != null) {
-          // ignore: deprecated_member_use
-          final superElement = supertype.element.displayName;
-          if (superElement.isNotEmpty && superElement != 'Object') {
-            return superElement;
-          }
-        }
-      }
-    } catch (_) {
-      // Fall back to AST when element model is unavailable.
-    }
     return astSuper;
   }
 
@@ -107,7 +132,7 @@ class SemanticSession {
       final supertype = element.supertype;
       if (supertype == null) return null;
       // ignore: experimental_member_use
-      final name = supertype.element3.displayName;
+      final name = supertype.element.displayName;
       if (name.isNotEmpty && name != 'Object') return name;
     } catch (_) {
       // Fragment API unavailable in this analyzer context.
@@ -135,7 +160,7 @@ class SemanticSession {
     if (target is SimpleIdentifier) return target.name;
     if (target is PrefixedIdentifier) return target.identifier.name;
     if (target is InstanceCreationExpression) {
-      return target.constructorName.type.name2.lexeme;
+      return target.constructorName.type.name.lexeme;
     }
     return target?.toString();
   }
@@ -150,7 +175,7 @@ class SemanticSession {
     } catch (_) {
       // Fall back to AST type name.
     }
-    return node.constructorName.type.name2.lexeme;
+    return node.constructorName.type.name.lexeme;
   }
 
   /// Resolves constructor calls written as `Type()`.
@@ -161,7 +186,7 @@ class SemanticSession {
     return null;
   }
 
-  /// Index of class simple names to file paths.
+  /// Index of class simple names to file paths using the parse cache.
   Map<String, List<String>> buildClassIndex(
     String projectRoot,
     List<String> dartFiles,
@@ -170,8 +195,7 @@ class SemanticSession {
     for (final relative in dartFiles) {
       final absolute = p.join(projectRoot, relative);
       if (!File(absolute).existsSync()) continue;
-      final content = File(absolute).readAsStringSync();
-      final unit = getUnit(absolute, content);
+      final unit = readUnit(absolute);
       for (final decl in unit.declarations) {
         if (decl is ClassDeclaration) {
           index.putIfAbsent(decl.name.lexeme, () => []).add(relative);
@@ -186,4 +210,60 @@ class SemanticSession {
     final first = name[0];
     return first == first.toUpperCase();
   }
+}
+
+/// Heuristic for whether a file benefits from semantic resolution.
+bool needsSemanticResolution(String relativePath, CompilationUnit unit) {
+  final path = relativePath.toLowerCase();
+  if (path.contains('/test/') ||
+      path.endsWith('.g.dart') ||
+      path.endsWith('.freezed.dart') ||
+      path.contains('/generated/')) {
+    return false;
+  }
+
+  if (path.contains('/models/') &&
+      path.endsWith('_model.dart') &&
+      !path.contains('repository')) {
+    return false;
+  }
+
+  if (path.contains('_screen') ||
+      path.contains('_page') ||
+      path.contains('/screens/') ||
+      path.contains('/pages/') ||
+      path.contains('/presentation/') ||
+      path.contains('_provider') ||
+      path.contains('_controller') ||
+      path.contains('/controllers/') ||
+      path.contains('_binding') ||
+      path.contains('/bindings/') ||
+      path.contains('_bloc') ||
+      path.contains('_cubit') ||
+      path.contains('_service') ||
+      path.contains('_repository') ||
+      path.contains('/services/') ||
+      path.contains('/data/') ||
+      path.contains('route') ||
+      path.contains('router')) {
+    return true;
+  }
+
+  for (final decl in unit.declarations) {
+    if (decl is! ClassDeclaration) continue;
+    final name = decl.name.lexeme;
+    if (name.endsWith('Screen') ||
+        name.endsWith('Page') ||
+        name.endsWith('Controller') ||
+        name.endsWith('Provider') ||
+        name.endsWith('Bloc') ||
+        name.endsWith('Cubit') ||
+        name.endsWith('Binding') ||
+        name.endsWith('Service') ||
+        name.endsWith('Repository')) {
+      return true;
+    }
+  }
+
+  return false;
 }

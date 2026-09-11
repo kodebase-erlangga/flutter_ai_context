@@ -83,12 +83,21 @@ class DartScanner {
     final classIndex = session.buildClassIndex(root, indexFiles);
     final symbolRegistry = _SymbolRegistry(classIndex);
 
+    final semanticTargets = <String>[];
+    for (final relativePath in dartFiles) {
+      final absolutePath = p.join(root, relativePath);
+      if (!File(absolutePath).existsSync()) continue;
+      final unit = session.readUnit(absolutePath);
+      if (needsSemanticResolution(relativePath, unit)) {
+        semanticTargets.add(absolutePath);
+      }
+    }
+    await session.ensureResolvedBatch(semanticTargets);
+
     for (final relativePath in dartFiles) {
       final absolutePath = p.join(root, relativePath);
       try {
-        await session.ensureResolved(absolutePath);
-        final content = File(absolutePath).readAsStringSync();
-        final unit = session.getUnit(absolutePath, content);
+        final unit = session.getUnit(absolutePath);
         if (session.isSemanticallyResolved(absolutePath)) semanticResolved++;
 
         final importUris = _collectImports(unit);
@@ -136,7 +145,11 @@ class DartScanner {
                 type: EdgeType.contains,
               ),
             );
-            _countStateManagement(classification.nodeType, smSignals);
+            _countStateManagement(
+              classification.nodeType,
+              smSignals,
+              framework: classification.stateManagementFramework,
+            );
           },
           onRelationship: (fromId, targetId, edgeType, evidence) {
             graph.addEdge(
@@ -181,16 +194,28 @@ class DartScanner {
     );
   }
 
-  void _countStateManagement(NodeType type, StateManagementSignals signals) {
+  void _countStateManagement(
+    NodeType type,
+    StateManagementSignals signals, {
+    String? framework,
+  }) {
     switch (type) {
       case NodeType.provider:
-        signals.provider += 2;
+        if (framework == 'getx') {
+          signals.getx += 2;
+        } else {
+          signals.provider += 2;
+        }
       case NodeType.bloc:
         signals.bloc += 2;
       case NodeType.cubit:
         signals.bloc += 2;
       case NodeType.notifier:
-        signals.riverpod += 2;
+        if (framework == 'getx') {
+          signals.getx += 2;
+        } else {
+          signals.riverpod += 2;
+        }
       default:
         break;
     }

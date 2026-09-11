@@ -86,7 +86,7 @@ class _RouteVisitor extends RecursiveAstVisitor<void> {
 
   @override
   void visitInstanceCreationExpression(InstanceCreationExpression node) {
-    final typeName = node.constructorName.type.name2.lexeme;
+    final typeName = node.constructorName.type.name.lexeme;
     if (typeName == 'GoRoute') {
       final path = _extractNamedArg(node.argumentList, 'path');
       final screen = _extractBuilderScreen(node.argumentList);
@@ -287,7 +287,7 @@ class _RouteVisitor extends RecursiveAstVisitor<void> {
 
   String? _extractTypeFromExpression(Expression expr) {
     if (expr is InstanceCreationExpression) {
-      return expr.constructorName.type.name2.lexeme;
+      return expr.constructorName.type.name.lexeme;
     }
     return null;
   }

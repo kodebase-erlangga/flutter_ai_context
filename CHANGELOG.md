@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.5.2
+
+### Improved
+- Scan performance: parse-once AST cache, selective semantic resolution, batched resolves
+- Context ranker includes `core/` and `shared/` files imported directly by a feature
+- Context ranker supports `modules/` feature paths
+- GetX hybrid detection for ChangeNotifier controllers and `*Binding` classes
+- Context packs dedupe Related Nodes and use incremental token budgeting
+
+## 0.5.1
+
+### Fixed
+- Detect `*Page` / `pages/` widgets as screens (GetX and page-first projects)
+- Context ranker scopes results to the target feature folder (less cross-feature noise)
+- Context pack signatures prefer the primary class per file over inner types
+- Doctor separates warnings vs info; `feature.missing_screen` respects Page widgets
+- Doctor readiness score ignores info-severity findings
+- `context` CLI lists only files included in the token-budgeted pack
+
+### Added
+- `getx_pages` benchmark fixture (24 Dart files, page-first GetX layout)
+- Tests for doctor scoring and context pack selection
+
 ## 0.5.0
 
 ### Added

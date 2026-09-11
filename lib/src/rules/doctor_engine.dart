@@ -1,4 +1,5 @@
 import '../config/models/project_config.dart';
+import '../graph/node.dart';
 import '../graph/project_graph.dart';
 import '../graph/schema.dart';
 import '../inference/architecture_inference.dart';
@@ -172,8 +173,8 @@ class DoctorEngine {
           .edgesFrom(feature.id)
           .where((e) => e.type == EdgeType.contains)
           .map((e) => graph.findNode(e.to))
-          .whereType();
-      final hasScreen = members.any((m) => m.type == NodeType.screen);
+          .whereType<GraphNode>();
+      final hasScreen = members.any(_isPresentationNode);
       if (!hasScreen) {
         findings.add(
           DoctorFinding(
@@ -254,37 +255,51 @@ class DoctorEngine {
   }
 
   int _scoreArchitecture(List<DoctorFinding> findings, double confidence) {
-    final archFindings = findings
-        .where((f) =>
-            f.rule?.startsWith('direct_http') == true ||
-            f.rule == 'screen_bypasses_state_management')
-        .length;
+    final archFindings = _actionableFindings(findings, rule: (rule) {
+      return rule?.startsWith('direct_http') == true ||
+          rule == 'screen_bypasses_state_management';
+    });
     final base = (confidence * 100).round();
     return (base - archFindings * 10).clamp(0, 100);
   }
 
   int _scoreNaming(List<DoctorFinding> findings) {
     final namingFindings =
-        findings.where((f) => f.rule?.startsWith('naming') == true).length;
+        _actionableFindings(findings, rule: (rule) => rule?.startsWith('naming') == true);
     return (100 - namingFindings * 5).clamp(0, 100);
   }
 
   int _scoreRoutes(List<DoctorFinding> findings, ProjectGraph graph) {
     final routeCount = graph.nodesByType(NodeType.route).length;
     if (routeCount == 0) return 60;
-    final routingFindings =
-        findings.where((f) => f.rule?.startsWith('routing') == true).length;
+    final routingFindings = _actionableFindings(
+      findings,
+      rule: (rule) => rule?.startsWith('routing') == true,
+    );
     return (88 - routingFindings * 8).clamp(0, 100);
   }
 
   int _scoreFeatures(ProjectGraph graph, List<DoctorFinding> findings) {
     final features = graph.nodesByType(NodeType.feature).length;
-    final missingScreen = findings
-        .where((f) => f.rule == 'feature.missing_screen')
-        .length;
+    final missingScreen = _actionableFindings(
+      findings,
+      rule: (rule) => rule == 'feature.missing_screen',
+    );
     if (features == 0) return 50;
     if (features < 3) return (70 - missingScreen * 5).clamp(0, 100);
     return (88 - missingScreen * 5).clamp(0, 100);
+  }
+
+  int _actionableFindings(
+    List<DoctorFinding> findings, {
+    required bool Function(String? rule) rule,
+  }) {
+    return findings
+        .where(
+          (finding) =>
+              finding.severity != FindingSeverity.info && rule(finding.rule),
+        )
+        .length;
   }
 
   String _capitalize(String input) =>
@@ -301,6 +316,14 @@ class DoctorEngine {
     return type == NodeType.service ||
         type == NodeType.repository ||
         type == NodeType.apiClient;
+  }
+
+  bool _isPresentationNode(GraphNode node) {
+    if (node.type == NodeType.screen) return true;
+    if (node.type != NodeType.widget) return false;
+    return node.name.endsWith('Page') ||
+        (node.file?.contains('/pages/') ?? false) ||
+        (node.file?.endsWith('_page.dart') ?? false);
   }
 }
 

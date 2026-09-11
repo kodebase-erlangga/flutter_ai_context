@@ -65,15 +65,37 @@ class OutputFormatter {
     if (report.findings.isEmpty) {
       buffer.writeln('✓ No issues detected');
     } else {
-      buffer.writeln('Warnings');
-      buffer.writeln();
-      for (final finding in report.findings) {
-        buffer.writeln('⚠ ${finding.file}');
-        buffer.writeln('  ${finding.message}');
-        if (finding.remediation != null) {
-          buffer.writeln('  Suggested action: ${finding.remediation}');
-        }
+      final warnings = report.findings
+          .where((f) => f.severity == FindingSeverity.warning)
+          .toList();
+      final infos = report.findings
+          .where((f) => f.severity == FindingSeverity.info)
+          .toList();
+
+      if (warnings.isNotEmpty) {
+        buffer.writeln('Warnings');
         buffer.writeln();
+        for (final finding in warnings) {
+          buffer.writeln('⚠ ${finding.file}');
+          buffer.writeln('  ${finding.message}');
+          if (finding.remediation != null) {
+            buffer.writeln('  Suggested action: ${finding.remediation}');
+          }
+          buffer.writeln();
+        }
+      }
+
+      if (infos.isNotEmpty) {
+        buffer.writeln('Info');
+        buffer.writeln();
+        for (final finding in infos) {
+          buffer.writeln('ℹ ${finding.file}');
+          buffer.writeln('  ${finding.message}');
+          if (finding.remediation != null) {
+            buffer.writeln('  Note: ${finding.remediation}');
+          }
+          buffer.writeln();
+        }
       }
     }
 

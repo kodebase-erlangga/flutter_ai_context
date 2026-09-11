@@ -191,12 +191,14 @@ rules:
 
 All analysis runs locally. No source code is uploaded. Secret-like strings are redacted from generated output.
 
-## Limitations (v0.5.0)
+## Limitations (v0.5.2)
 
-- Semantic resolution uses lazy `AnalysisContextCollection` resolution with Element2 fragment fallback and AST heuristics when the SDK context is incomplete.
+- Semantic resolution uses parse-once caching with selective lazy resolution and Element2 fragment fallback when the SDK context is incomplete.
+- `*Page` / `pages/` widgets are treated as screens; GetX hybrid `ChangeNotifier` controllers in `controllers/` paths are detected as GetX.
 - `auto_route` support covers common `AutoRoute` / `@RoutePage` patterns; deep nested routing is not fully supported yet.
 - Incremental `sync` re-scans changed files, graph dependents, and import dependents (bounded by cached metadata).
-- Context packs use graph-distance ranking, class signatures, and a configurable token budget (`context.token_budget`).
+- Context packs use feature-scoped graph ranking, class signatures, and a configurable token budget (`context.token_budget`).
+- Doctor info findings are shown separately and do not reduce the readiness score; warnings still do.
 - Doctor rules are expanding but not a replacement for `flutter analyze` or custom linters.
 - **Pre-1.0 API** — graph schema and CLI output may change before `1.0.0`.
 
