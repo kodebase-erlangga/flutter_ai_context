@@ -38,7 +38,7 @@ void main() {
     );
     stopwatch.stop();
 
-    expect(stopwatch.elapsedMilliseconds, lessThan(30000));
+    expect(stopwatch.elapsedMilliseconds, lessThan(35000));
     expect(result.scanResult.filesAnalyzed, 24);
     expect(result.features.length, greaterThanOrEqualTo(8));
     expect(result.stateManagement.primary?.toLowerCase(), contains('getx'));

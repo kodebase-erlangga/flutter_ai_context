@@ -423,6 +423,26 @@ class _SemanticClassVisitor extends RecursiveAstVisitor<void> {
       );
     }
 
+    if (methodName == 'read' ||
+        methodName == 'watch' ||
+        methodName == 'select') {
+      final targetStr = node.target?.toString() ?? '';
+      if (targetStr == 'context' || targetStr == 'ref') {
+        final typeArgs = node.typeArguments?.arguments;
+        if (typeArgs != null && typeArgs.isNotEmpty) {
+          final typeName = typeArgs.first.toString().replaceAll('?', '');
+          onRelationship(
+            _currentClassId!,
+            symbolRegistry.resolve(typeName, filePath),
+            methodName == 'watch' || methodName == 'select'
+                ? EdgeType.watches
+                : EdgeType.reads,
+            ['$targetStr.$methodName<$typeName>()'],
+          );
+        }
+      }
+    }
+
     final target = session.resolveInvocationTarget(node);
     if (target != null && methodName.isNotEmpty) {
       final targetId = symbolRegistry.resolve(target, filePath);

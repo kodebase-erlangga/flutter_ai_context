@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.3
+
+### Improved
+- Shared flow inference distinguishes GetX, Riverpod, Provider, and StatefulWidget patterns
+- Context packs include Agent Guide, Entry Points, and a dedicated Widgets section
+- `context.read<T>()` / `context.watch<T>()` edges improve repository and controller detection
+- Faster scans via AST-based semantic skip for constants, theme, and non-interactive files
+
 ## 0.5.2
 
 ### Improved

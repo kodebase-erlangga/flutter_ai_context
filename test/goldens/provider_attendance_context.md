@@ -8,6 +8,18 @@
 
 Screen -> Provider -> Service
 
+## Agent Guide
+
+When changing **Attendance**:
+- Follow `Screen -> Provider -> Service` — do not bypass existing layers.
+- Edit files in this feature scope before adding new ones.
+- Reuse repositories, models, and widgets listed below.
+- Do not call HTTP/network APIs directly from UI widgets.
+
+## Entry Points
+
+- `lib/features/attendance/attendance_screen.dart`
+
 ## Screens
 
 - `lib/features/attendance/attendance_screen.dart` — AttendanceScreen · extends StatelessWidget · build (1.15)

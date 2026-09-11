@@ -82,6 +82,20 @@ class ContextPackGenerator {
       buffer.writeln();
       buffer.writeln(observedFlow);
       buffer.writeln();
+      _writeAgentGuide(buffer, scope, observedFlow, ranked);
+    }
+
+    final entryPoints = ranked
+        .where((node) => _isScreen(node.type) && node.file != null)
+        .map((node) => node.file!)
+        .toList();
+    if (entryPoints.isNotEmpty) {
+      buffer.writeln('## Entry Points');
+      buffer.writeln();
+      for (final file in entryPoints) {
+        buffer.writeln('- `$file`');
+      }
+      buffer.writeln();
     }
 
     final groupedIds = <String>{};
@@ -102,6 +116,7 @@ class ContextPackGenerator {
       groupedIds,
     );
     _writeGroup(buffer, graph, 'Data Layer', ranked, _isData, groupedIds);
+    _writeGroup(buffer, graph, 'Widgets', ranked, _isWidget, groupedIds);
     _writeGroup(buffer, graph, 'Routes', ranked, _isRoute, groupedIds);
     _writeGroup(buffer, graph, 'Other', ranked, _isOther, groupedIds);
 
@@ -151,10 +166,32 @@ class ContextPackGenerator {
     return selected;
   }
 
+  void _writeAgentGuide(
+    StringBuffer buffer,
+    String scope,
+    String observedFlow,
+    List<RankedNode> ranked,
+  ) {
+    buffer.writeln('## Agent Guide');
+    buffer.writeln();
+    buffer.writeln('When changing **$scope**:');
+    buffer.writeln('- Follow `$observedFlow` — do not bypass existing layers.');
+    buffer.writeln('- Edit files in this feature scope before adding new ones.');
+    buffer.writeln('- Reuse repositories, models, and widgets listed below.');
+    buffer.writeln('- Do not call HTTP/network APIs directly from UI widgets.');
+    if (ranked.any((node) => node.type == NodeType.repository)) {
+      buffer.writeln(
+        '- Route data access through the feature repository/service layer.',
+      );
+    }
+    buffer.writeln();
+  }
+
   int _baseTokens(String scope, String? observedFlow) {
     var tokens = TokenEstimator.estimate(MarkdownHeader.title('Context: $scope'));
     if (observedFlow != null) {
       tokens += TokenEstimator.estimate('## Observed Flow\n\n$observedFlow\n\n');
+      tokens += TokenEstimator.estimate('## Agent Guide\n\n');
     }
     return tokens;
   }
@@ -173,6 +210,8 @@ class ContextPackGenerator {
       group = 'State Management';
     } else if (node.file != null && _isData(type)) {
       group = 'Data Layer';
+    } else if (node.file != null && _isWidget(type)) {
+      group = 'Widgets';
     } else if (node.file != null && _isRoute(type)) {
       group = 'Routes';
     } else if (node.file != null && _isOther(type)) {
@@ -241,11 +280,14 @@ class ContextPackGenerator {
 
   bool _isRoute(NodeType? type) => type == NodeType.route;
 
+  bool _isWidget(NodeType? type) => type == NodeType.widget;
+
   bool _isOther(NodeType? type) {
     return type == null ||
         (!_isScreen(type) &&
             !_isState(type) &&
             !_isData(type) &&
+            type != NodeType.widget &&
             !_isRoute(type));
   }
 

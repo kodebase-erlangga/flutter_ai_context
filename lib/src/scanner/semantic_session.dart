@@ -4,6 +4,7 @@ import 'package:analyzer/dart/analysis/analysis_context_collection.dart';
 import 'package:analyzer/dart/analysis/results.dart';
 import 'package:analyzer/dart/analysis/utilities.dart';
 import 'package:analyzer/dart/ast/ast.dart';
+import 'package:analyzer/dart/ast/visitor.dart';
 import 'package:analyzer/file_system/physical_file_system.dart';
 import 'package:path/path.dart' as p;
 
@@ -75,7 +76,7 @@ class SemanticSession {
   /// Resolves [paths] with bounded concurrency.
   Future<void> ensureResolvedBatch(
     List<String> absolutePaths, {
-    int concurrency = 6,
+    int concurrency = 8,
   }) async {
     if (absolutePaths.isEmpty || _collection == null) return;
 
@@ -215,18 +216,8 @@ class SemanticSession {
 /// Heuristic for whether a file benefits from semantic resolution.
 bool needsSemanticResolution(String relativePath, CompilationUnit unit) {
   final path = relativePath.toLowerCase();
-  if (path.contains('/test/') ||
-      path.endsWith('.g.dart') ||
-      path.endsWith('.freezed.dart') ||
-      path.contains('/generated/')) {
-    return false;
-  }
-
-  if (path.contains('/models/') &&
-      path.endsWith('_model.dart') &&
-      !path.contains('repository')) {
-    return false;
-  }
+  if (_isSemanticSkipPath(path)) return false;
+  if (!_unitNeedsSemanticAnalysis(unit)) return false;
 
   if (path.contains('_screen') ||
       path.contains('_page') ||
@@ -266,4 +257,42 @@ bool needsSemanticResolution(String relativePath, CompilationUnit unit) {
   }
 
   return false;
+}
+
+bool _isSemanticSkipPath(String path) {
+  return path.contains('/test/') ||
+      path.endsWith('.g.dart') ||
+      path.endsWith('.freezed.dart') ||
+      path.contains('/generated/') ||
+      path.contains('/constants/') ||
+      path.contains('/extensions/') ||
+      path.contains('/theme/') ||
+      path.endsWith('_strings.dart') ||
+      path.contains('/l10n/') ||
+      (path.contains('/domain/') && path.endsWith('_model.dart')) ||
+      (path.contains('/models/') &&
+          path.endsWith('_model.dart') &&
+          !path.contains('repository'));
+}
+
+bool _unitNeedsSemanticAnalysis(CompilationUnit unit) {
+  final visitor = _SemanticNeedVisitor();
+  unit.accept(visitor);
+  return visitor.needed;
+}
+
+class _SemanticNeedVisitor extends RecursiveAstVisitor<void> {
+  bool needed = false;
+
+  @override
+  void visitMethodInvocation(MethodInvocation node) {
+    needed = true;
+    super.visitMethodInvocation(node);
+  }
+
+  @override
+  void visitInstanceCreationExpression(InstanceCreationExpression node) {
+    needed = true;
+    super.visitInstanceCreationExpression(node);
+  }
 }

@@ -1,6 +1,7 @@
 import '../graph/node.dart';
 import '../graph/project_graph.dart';
 import '../graph/schema.dart';
+import '../inference/flow_inference.dart';
 
 /// Ranked file/node for context packs.
 class RankedNode {
@@ -36,6 +37,11 @@ class RankResult {
 
 /// Ranks nodes by graph distance, role, and scope relevance.
 class RelevanceRanker {
+  RelevanceRanker({FlowInference? flowInference})
+      : _flowInference = flowInference ?? FlowInference();
+
+  final FlowInference _flowInference;
+
   static const _forwardEdges = {
     EdgeType.contains,
     EdgeType.calls,
@@ -76,7 +82,7 @@ class RelevanceRanker {
 
       return RankResult(
         nodes: _sortedUnique(scores),
-        observedFlow: _inferFeatureFlow(graph, featureNode),
+        observedFlow: _flowInference.inferFeatureFlow(graph, featureNode),
       );
     }
 
@@ -273,71 +279,5 @@ class RelevanceRanker {
       default:
         return 0.0;
     }
-  }
-
-  String? _inferFeatureFlow(ProjectGraph graph, GraphNode feature) {
-    final members = graph
-        .edgesFrom(feature.id)
-        .where((edge) => edge.type == EdgeType.contains)
-        .map((edge) => graph.findNode(edge.to))
-        .whereType<GraphNode>()
-        .toList();
-
-    final hasPresentation = members.any(_isPresentationNode);
-    final hasProvider = members.any((m) => m.type == NodeType.provider);
-    final hasNotifier = members.any((m) => m.type == NodeType.notifier);
-    final hasGetxController = members.any(_isGetxStateNode);
-    final hasBloc = members.any(
-      (m) => m.type == NodeType.bloc || m.type == NodeType.cubit,
-    );
-    final hasService = members.any(
-      (m) =>
-          m.type == NodeType.service ||
-          m.type == NodeType.repository ||
-          m.type == NodeType.apiClient,
-    );
-
-    final entry = _presentationEntryLabel(members);
-    if (hasPresentation && hasGetxController && hasService) {
-      return '$entry -> GetX Controller -> Repository';
-    }
-    if (hasPresentation && hasNotifier && hasService) {
-      return '$entry -> Riverpod Notifier -> Repository';
-    }
-    if (hasPresentation && hasBloc && hasService) {
-      return '$entry -> Bloc -> Repository';
-    }
-    if (hasPresentation && hasProvider && hasService) {
-      return '$entry -> Provider -> Service';
-    }
-    if (hasPresentation && hasProvider) return '$entry -> Provider';
-    if (hasPresentation && hasBloc) return '$entry -> Bloc';
-    return null;
-  }
-
-  bool _isGetxStateNode(GraphNode node) {
-    if (node.metadata['stateManagementFramework'] == 'getx') return true;
-    return node.type == NodeType.notifier && node.name.endsWith('Controller');
-  }
-
-  String _presentationEntryLabel(List<GraphNode> members) {
-    final presentations = members.where(_isPresentationNode);
-    if (presentations.any(
-      (node) =>
-          node.name.endsWith('Screen') ||
-          (node.file?.contains('_screen') ?? false) ||
-          (node.file?.contains('/screens/') ?? false),
-    )) {
-      return 'Screen';
-    }
-    return 'Page';
-  }
-
-  bool _isPresentationNode(GraphNode node) {
-    if (node.type == NodeType.screen) return true;
-    if (node.type != NodeType.widget) return false;
-    return node.name.endsWith('Page') ||
-        (node.file?.contains('/pages/') ?? false) ||
-        (node.file?.endsWith('_page.dart') ?? false);
   }
 }

@@ -10,7 +10,7 @@ import 'commands/status_command.dart';
 import 'commands/sync_command.dart';
 
 /// CLI version.
-const cliVersion = '0.5.2';
+const cliVersion = '0.5.3';
 
 /// Main CLI runner.
 class CliRunner {
