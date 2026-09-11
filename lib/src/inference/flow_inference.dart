@@ -26,10 +26,21 @@ class FlowInference {
   }
 
   List<GraphNode> _featureMembers(ProjectGraph graph, GraphNode feature) {
-    return graph
-        .edgesFrom(feature.id)
-        .where((edge) => edge.type == EdgeType.contains)
-        .map((edge) => graph.findNode(edge.to))
+    final memberIds = <String>{};
+
+    for (final edge in graph.edgesFrom(feature.id)) {
+      if (edge.type == EdgeType.contains) {
+        memberIds.add(edge.to);
+      }
+    }
+    for (final edge in graph.edgesTo(feature.id)) {
+      if (edge.type == EdgeType.belongsToFeature) {
+        memberIds.add(edge.from);
+      }
+    }
+
+    return memberIds
+        .map((id) => graph.findNode(id))
         .whereType<GraphNode>()
         .toList();
   }

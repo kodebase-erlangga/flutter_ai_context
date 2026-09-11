@@ -97,7 +97,7 @@ void main() {
       await environment.initializeServer();
     });
 
-    test('exposes phase 1 and phase 2 tools', () async {
+    test('exposes phase 1, 2, and 3 tools', () async {
       final tools = await environment.serverConnection.listTools();
       expect(
         tools.tools.map((t) => t.name),
@@ -105,11 +105,31 @@ void main() {
           'project_status',
           'list_features',
           'get_context',
+          'get_architecture',
           'sync_context',
           'run_doctor',
           'query_graph',
         ]),
       );
+    });
+
+    test('exposes flutter-feature-context prompt', () async {
+      final prompts = await environment.serverConnection.listPrompts();
+      expect(
+        prompts.prompts.map((prompt) => prompt.name),
+        contains('flutter-feature-context'),
+      );
+
+      final prompt = await environment.serverConnection.getPrompt(
+        GetPromptRequest(
+          name: 'flutter-feature-context',
+          arguments: {'scope': 'attendance'},
+        ),
+      );
+      final text = (prompt.messages.single.content as TextContent).text;
+      expect(text, contains('attendance'));
+      expect(text.toLowerCase(), contains('context: attendance'));
+      expect(text, contains('Project overview'));
     });
 
     test('project_status returns FRESH for seeded fixture', () async {
@@ -147,11 +167,15 @@ void main() {
       expect(text, contains('Observed Flow'));
     });
 
-    test('resources expose agents and architecture', () async {
+    test('resources expose agents, architecture, and features', () async {
       final resources = await environment.serverConnection.listResources();
       expect(
         resources.resources.map((r) => r.uri),
-        containsAll([McpUris.agents, McpUris.architecture]),
+        containsAll([
+          McpUris.agents,
+          McpUris.architecture,
+          McpUris.features,
+        ]),
       );
 
       final agents = await environment.serverConnection.readResource(

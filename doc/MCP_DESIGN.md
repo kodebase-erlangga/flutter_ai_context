@@ -270,10 +270,12 @@ Alias pendek `mcp` bisa ditambahkan later.
 
 ### Phase 3 — 1.0 polish
 
-- [ ] Auto `sync` when STALE before `get_context` (configurable)
-- [ ] Prompts template
-- [ ] Publish + verify di Cursor MCP settings
-- [ ] Dogfood on `lms_intelecto`
+- [x] Auto `sync` when STALE before `get_context` (configurable via `mcp.auto_sync_on_get_context`)
+- [x] Prompts template (`flutter-feature-context`)
+- [x] `get_architecture` tool + `features` resource
+- [x] Project brief in context packs (`mcp.include_project_brief`)
+- [ ] Publish `0.9.0` + verify di Cursor MCP settings
+- [x] Dogfood on `lms_intelecto` (`tool/dogfood_mcp.dart`)
 
 ---
 

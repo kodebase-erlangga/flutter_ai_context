@@ -5,13 +5,14 @@ import 'package:stream_channel/stream_channel.dart';
 
 import '../cli/runner.dart';
 import 'graph_query.dart';
+import 'mcp_prompt_builder.dart';
 import 'mcp_project_service.dart';
 import 'mcp_uris.dart';
 import 'project_root.dart';
 
 /// MCP server exposing flutter_ai_context project intelligence.
 final class FlutterAiContextMcpServer extends MCPServer
-    with ToolsSupport, ResourcesSupport {
+    with ToolsSupport, ResourcesSupport, PromptsSupport {
   FlutterAiContextMcpServer({
     required StreamChannel<String> channel,
     required McpProjectService service,
@@ -27,8 +28,9 @@ final class FlutterAiContextMcpServer extends MCPServer
           instructions:
               'Local-first Flutter project intelligence from flutter_ai_context. '
               'Use project_status to check FRESH/STALE, sync_context to update, '
-              'list_features / get_context for feature packs, query_graph for '
-              'graph search, and run_doctor for architecture checks.',
+              'list_features / get_context for feature packs (auto-syncs when STALE), '
+              'prompt flutter-feature-context for combined project + feature context, '
+              'query_graph for graph search, and run_doctor for architecture checks.',
         );
 
   final McpProjectService _service;
@@ -38,6 +40,7 @@ final class FlutterAiContextMcpServer extends MCPServer
   FutureOr<InitializeResult> initialize(InitializeRequest request) {
     _registerTools();
     _registerResources();
+    _registerPrompts();
     return super.initialize(request);
   }
 
@@ -67,18 +70,37 @@ final class FlutterAiContextMcpServer extends MCPServer
       Tool(
         name: 'get_context',
         description:
-            'Get token-budgeted Markdown context for a feature scope.',
+            'Get token-budgeted Markdown context for a feature scope. '
+            'Auto-syncs when STALE unless disabled in flutter_ai_context.yaml.',
         inputSchema: ObjectSchema(
           properties: {
             'scope': StringSchema(
               description:
                   'Feature scope name (case-insensitive), e.g. auth, presensi.',
             ),
+            'autoSync': BooleanSchema(
+              description:
+                  'Override mcp.auto_sync_on_get_context (default: true).',
+            ),
+            'includeProjectBrief': BooleanSchema(
+              description:
+                  'Prepend project overview from AGENTS.md (default: true).',
+            ),
           },
           required: ['scope'],
         ),
       ),
       _handleGetContext,
+    );
+
+    registerTool(
+      Tool(
+        name: 'get_architecture',
+        description:
+            'Get observed architecture summary Markdown (.ai/architecture.md).',
+        inputSchema: ObjectSchema(),
+      ),
+      _handleGetArchitecture,
     );
 
     registerTool(
@@ -182,22 +204,73 @@ final class FlutterAiContextMcpServer extends MCPServer
       ),
     );
 
+    addResource(
+      Resource(
+        uri: McpUris.features,
+        name: 'features',
+        description: 'Feature index from .ai/features.md.',
+        mimeType: 'text/markdown',
+      ),
+      (request) => _textResourceResult(
+        request.uri,
+        _service.readFeaturesMarkdown(overrideRoot: _projectRoot),
+        mimeType: 'text/markdown',
+      ),
+    );
+
     addResourceTemplate(
       ResourceTemplate(
         uriTemplate: McpUris.contextTemplate,
         name: 'feature-context',
-        description: 'Per-feature context pack Markdown.',
+        description:
+            'Per-feature context pack Markdown (auto-syncs when STALE).',
         mimeType: 'text/markdown',
       ),
-      (request) {
+      (request) async {
         if (!McpUris.isContextUri(request.uri)) return null;
+        final text = await _service.readContextResource(
+          uri: request.uri,
+          overrideRoot: _projectRoot,
+        );
         return _textResourceResult(
           request.uri,
-          _service.readContextResource(
-            uri: request.uri,
-            overrideRoot: _projectRoot,
-          ),
+          text,
           mimeType: 'text/markdown',
+        );
+      },
+    );
+  }
+
+  void _registerPrompts() {
+    addPrompt(
+      Prompt(
+        name: 'flutter-feature-context',
+        description:
+            'Combined project architecture brief and feature context pack.',
+        arguments: [
+          PromptArgument(
+            name: 'scope',
+            description: 'Feature scope name (case-insensitive).',
+            required: true,
+          ),
+        ],
+      ),
+      (request) async {
+        final scope = request.arguments?['scope'] as String?;
+        if (scope == null || scope.isEmpty) {
+          throw ArgumentError('Missing required prompt argument: scope');
+        }
+
+        final context = await _service.getContext(
+          scope: scope,
+          includeProjectBrief: false,
+          overrideRoot: _projectRoot,
+        );
+        final agents = _service.readAgentsMarkdown(overrideRoot: _projectRoot);
+        return McpPromptBuilder.featureContextPrompt(
+          scope: scope,
+          context: context,
+          projectBrief: McpPromptBuilder.projectBriefFromAgents(agents),
         );
       },
     );
@@ -217,17 +290,27 @@ final class FlutterAiContextMcpServer extends MCPServer
     });
   }
 
-  CallToolResult _handleGetContext(CallToolRequest request) {
+  Future<CallToolResult> _handleGetContext(CallToolRequest request) async {
     final scope = request.arguments?['scope'] as String?;
     if (scope == null || scope.isEmpty) {
       return _errorResult('Missing required argument: scope');
     }
 
-    return _runTool(
-      () => _service.getContextMarkdown(
+    final args = request.arguments ?? {};
+    return _runToolAsync(() async {
+      final result = await _service.getContext(
         scope: scope,
+        autoSync: args['autoSync'] as bool?,
+        includeProjectBrief: args['includeProjectBrief'] as bool?,
         overrideRoot: _projectRoot,
-      ),
+      );
+      return result.markdown;
+    });
+  }
+
+  CallToolResult _handleGetArchitecture(CallToolRequest request) {
+    return _runTool(
+      () => _service.readArchitectureMarkdown(overrideRoot: _projectRoot),
     );
   }
 

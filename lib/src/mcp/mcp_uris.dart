@@ -3,6 +3,7 @@ abstract final class McpUris {
   static const agents = 'flutter-ai-context://agents';
   static const architecture = 'flutter-ai-context://architecture';
   static const graph = 'flutter-ai-context://graph';
+  static const features = 'flutter-ai-context://features';
   static const contextTemplate = 'flutter-ai-context://context/{scope}';
 
   static bool isContextUri(String uri) {

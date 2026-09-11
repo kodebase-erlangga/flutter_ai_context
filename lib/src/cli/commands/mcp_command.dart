@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:dart_mcp/stdio.dart';
-import 'package:stream_channel/stream_channel.dart';
 
 import '../../mcp/flutter_ai_context_mcp_server.dart';
 import '../../mcp/mcp_project_service.dart';

@@ -1,3 +1,5 @@
+import 'mcp_settings.dart';
+
 /// Configuration model for `flutter_ai_context.yaml`.
 ///
 /// Loaded by the CLI scanner and used to override auto-detected
@@ -24,6 +26,7 @@ class ProjectConfig {
     this.preferredScreenSuffix,
     this.preferredProviderSuffix,
     this.forbiddenStateManagement = const [],
+    this.mcp = const McpSettings(),
   });
 
   /// Display name written to generated context files.
@@ -68,6 +71,9 @@ class ProjectConfig {
   /// State-management libraries flagged as forbidden.
   final List<String> forbiddenStateManagement;
 
+  /// MCP server behavior for AI clients.
+  final McpSettings mcp;
+
   /// Serializes this config to a YAML-compatible map.
   Map<String, dynamic> toYamlMap() {
     return {
@@ -98,6 +104,7 @@ class ProjectConfig {
         if (forbiddenStateManagement.isNotEmpty)
           'state_management': {'forbidden': forbiddenStateManagement},
       },
+      'mcp': mcp.toYamlMap(),
     };
   }
 
@@ -111,6 +118,7 @@ class ProjectConfig {
     final archRules = _asMap(rules['architecture']);
     final namingRules = _asMap(rules['naming']);
     final smRules = _asMap(rules['state_management']);
+    final mcp = _asMap(map['mcp']);
 
     return ProjectConfig(
       projectName: project['name'] as String?,
@@ -134,6 +142,7 @@ class ProjectConfig {
       preferredScreenSuffix: namingRules['screen_suffix'] as String?,
       preferredProviderSuffix: namingRules['provider_suffix'] as String?,
       forbiddenStateManagement: _asStringList(smRules['forbidden']) ?? const [],
+      mcp: McpSettings.fromYamlMap(mcp),
     );
   }
 

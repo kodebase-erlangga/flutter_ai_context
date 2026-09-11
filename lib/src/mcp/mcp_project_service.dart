@@ -5,6 +5,7 @@ import '../analysis/analysis_pipeline.dart';
 import '../cache/cache_manager.dart';
 import '../cli/output/formatter.dart';
 import '../config/config_loader.dart';
+import '../config/models/project_config.dart';
 import '../context/relevance_ranker.dart';
 import '../context/scope_suggester.dart';
 import '../discovery/project_discovery.dart';
@@ -14,7 +15,10 @@ import '../graph/schema.dart';
 import '../rules/findings.dart';
 import '../shared/logger.dart';
 import '../shared/paths.dart';
+import '../config/models/mcp_settings.dart';
 import 'graph_query.dart';
+import 'mcp_get_context_result.dart';
+import 'mcp_prompt_builder.dart';
 import 'mcp_uris.dart';
 import 'project_root.dart';
 
@@ -269,6 +273,46 @@ class McpProjectService {
     ];
   }
 
+  Future<McpGetContextResult> getContext({
+    required String scope,
+    bool? autoSync,
+    bool? includeProjectBrief,
+    String? overrideRoot,
+    String? cwd,
+  }) async {
+    final root = resolveRoot(overrideRoot: overrideRoot, cwd: cwd);
+    final paths = ProjectPaths(root);
+    final config = _configLoader.load(paths.configFile);
+    final settings = _resolveMcpSettings(config.mcp, autoSync, includeProjectBrief);
+
+    final prelude = await _autoSyncIfNeeded(
+      root: root,
+      autoSync: settings.autoSyncOnGetContext,
+    );
+
+    final packMarkdown = _buildContextPack(
+      root: root,
+      paths: paths,
+      config: config,
+      scope: scope,
+    );
+
+    final markdown = _composeContextMarkdown(
+      packMarkdown: packMarkdown,
+      prelude: prelude,
+      includeProjectBrief: settings.includeProjectBrief,
+      agentsMarkdown: _tryReadAgents(paths),
+    );
+
+    final status = projectStatus(overrideRoot: root);
+    return McpGetContextResult(
+      markdown: markdown,
+      contextStatus: status['context'] as String? ?? 'UNKNOWN',
+      autoSynced: prelude?.synced ?? false,
+      filesSynced: prelude?.filesSynced ?? 0,
+    );
+  }
+
   String getContextMarkdown({
     required String scope,
     String? overrideRoot,
@@ -277,6 +321,157 @@ class McpProjectService {
     final root = resolveRoot(overrideRoot: overrideRoot, cwd: cwd);
     final paths = ProjectPaths(root);
     final config = _configLoader.load(paths.configFile);
+    return _buildContextPack(
+      root: root,
+      paths: paths,
+      config: config,
+      scope: scope,
+    );
+  }
+
+  Future<String> readContextResource({
+    required String uri,
+    String? overrideRoot,
+    String? cwd,
+  }) async {
+    final scope = McpUris.scopeFromContextUri(uri);
+    if (scope == null) {
+      throw McpProjectException('Invalid context resource URI: $uri');
+    }
+
+    final result = await getContext(
+      scope: scope,
+      overrideRoot: overrideRoot,
+      cwd: cwd,
+    );
+    return result.markdown;
+  }
+
+  String readAgentsMarkdown({String? overrideRoot, String? cwd}) {
+    final paths = ProjectPaths(resolveRoot(overrideRoot: overrideRoot, cwd: cwd));
+    return _readTextFile(
+      paths.agentsMd,
+      fallbackMessage:
+          'AGENTS.md not found. Run `flutter_ai_context init` first.',
+    );
+  }
+
+  String readArchitectureMarkdown({String? overrideRoot, String? cwd}) {
+    final paths = ProjectPaths(resolveRoot(overrideRoot: overrideRoot, cwd: cwd));
+    return _readTextFile(
+      paths.aiFile('architecture.md'),
+      fallbackMessage:
+          'architecture.md not found. Run `flutter_ai_context init` first.',
+    );
+  }
+
+  String readFeaturesMarkdown({String? overrideRoot, String? cwd}) {
+    final paths = ProjectPaths(resolveRoot(overrideRoot: overrideRoot, cwd: cwd));
+    return _readTextFile(
+      paths.aiFile('features.md'),
+      fallbackMessage:
+          'features.md not found. Run `flutter_ai_context init` or `sync` first.',
+    );
+  }
+
+  Future<McpGetContextResult> buildFeatureContextPrompt({
+    required String scope,
+    String? overrideRoot,
+    String? cwd,
+  }) async {
+    final context = await getContext(
+      scope: scope,
+      includeProjectBrief: false,
+      overrideRoot: overrideRoot,
+      cwd: cwd,
+    );
+    final agents = readAgentsMarkdown(overrideRoot: overrideRoot, cwd: cwd);
+    return McpGetContextResult(
+      markdown: McpPromptBuilder.combineFeaturePrompt(
+        scope: scope,
+        projectBrief: McpPromptBuilder.projectBriefFromAgents(agents),
+        featureMarkdown: context.markdown,
+      ),
+      contextStatus: context.contextStatus,
+      autoSynced: context.autoSynced,
+      filesSynced: context.filesSynced,
+    );
+  }
+
+  String encodeJson(Object? value) {
+    return const JsonEncoder.withIndent('  ').convert(value);
+  }
+
+  ProjectGraph _loadGraph(String root) {
+    final cache = CacheManager(ProjectPaths(root));
+    final graph = cache.loadGraph();
+    if (graph == null) {
+      throw McpProjectException(
+        'No project graph found. Run `flutter_ai_context scan` first.',
+      );
+    }
+    return graph;
+  }
+
+  String _readTextFile(String path, {required String fallbackMessage}) {
+    final file = File(path);
+    if (!file.existsSync()) {
+      throw McpProjectException(fallbackMessage);
+    }
+    return file.readAsStringSync();
+  }
+
+  String? _tryReadAgents(ProjectPaths paths) {
+    final file = File(paths.agentsMd);
+    if (!file.existsSync()) return null;
+    return file.readAsStringSync();
+  }
+
+  McpSettings _resolveMcpSettings(
+    McpSettings defaults,
+    bool? autoSync,
+    bool? includeProjectBrief,
+  ) {
+    return McpSettings(
+      autoSyncOnGetContext: autoSync ?? defaults.autoSyncOnGetContext,
+      includeProjectBrief: includeProjectBrief ?? defaults.includeProjectBrief,
+    );
+  }
+
+  Future<_AutoSyncPrelude?> _autoSyncIfNeeded({
+    required String root,
+    required bool autoSync,
+  }) async {
+    if (!autoSync) return null;
+
+    final status = projectStatus(overrideRoot: root);
+    final context = status['context'] as String?;
+    if (context == null ||
+        context == 'NOT_INITIALIZED' ||
+        context == 'FRESH') {
+      return null;
+    }
+
+    final syncResult = await syncContext(
+      force: context == 'SCHEMA_MISMATCH',
+      overrideRoot: root,
+    );
+
+    return _AutoSyncPrelude(
+      synced: syncResult['synced'] as bool? ?? false,
+      filesSynced: syncResult['filesSynced'] as int? ??
+          syncResult['changedFilesRemaining'] as int? ??
+          0,
+      contextBefore: context,
+    );
+  }
+
+  String _buildContextPack({
+    required String root,
+    required ProjectPaths paths,
+    required ProjectConfig config,
+    required String scope,
+  }) {
     final graph = _loadGraph(root);
 
     final ranker = RelevanceRanker();
@@ -308,67 +503,46 @@ class McpProjectService {
     return pack.content;
   }
 
-  String readAgentsMarkdown({String? overrideRoot, String? cwd}) {
-    final paths = ProjectPaths(resolveRoot(overrideRoot: overrideRoot, cwd: cwd));
-    return _readTextFile(
-      paths.agentsMd,
-      fallbackMessage:
-          'AGENTS.md not found. Run `flutter_ai_context init` first.',
-    );
-  }
-
-  String readArchitectureMarkdown({String? overrideRoot, String? cwd}) {
-    final paths = ProjectPaths(resolveRoot(overrideRoot: overrideRoot, cwd: cwd));
-    return _readTextFile(
-      paths.aiFile('architecture.md'),
-      fallbackMessage:
-          'architecture.md not found. Run `flutter_ai_context init` first.',
-    );
-  }
-
-  String readContextResource({
-    required String uri,
-    String? overrideRoot,
-    String? cwd,
+  String _composeContextMarkdown({
+    required String packMarkdown,
+    required _AutoSyncPrelude? prelude,
+    required bool includeProjectBrief,
+    required String? agentsMarkdown,
   }) {
-    final scope = McpUris.scopeFromContextUri(uri);
-    if (scope == null) {
-      throw McpProjectException('Invalid context resource URI: $uri');
-    }
+    final buffer = StringBuffer();
 
-    final paths = ProjectPaths(resolveRoot(overrideRoot: overrideRoot, cwd: cwd));
-    final cached = paths.contextFile(scope.toLowerCase());
-    if (File(cached).existsSync()) {
-      return File(cached).readAsStringSync();
-    }
-
-    return getContextMarkdown(
-      scope: scope,
-      overrideRoot: overrideRoot,
-      cwd: cwd,
-    );
-  }
-
-  String encodeJson(Object? value) {
-    return const JsonEncoder.withIndent('  ').convert(value);
-  }
-
-  ProjectGraph _loadGraph(String root) {
-    final cache = CacheManager(ProjectPaths(root));
-    final graph = cache.loadGraph();
-    if (graph == null) {
-      throw McpProjectException(
-        'No project graph found. Run `flutter_ai_context scan` first.',
+    if (prelude != null && prelude.synced) {
+      buffer.writeln(
+        '> **Context auto-synced** — ${prelude.filesSynced} file(s) updated.',
       );
+      buffer.writeln();
     }
-    return graph;
-  }
 
-  String _readTextFile(String path, {required String fallbackMessage}) {
-    final file = File(path);
-    if (!file.existsSync()) {
-      throw McpProjectException(fallbackMessage);
+    if (includeProjectBrief && agentsMarkdown != null) {
+      final brief = McpPromptBuilder.projectBriefFromAgents(agentsMarkdown);
+      if (brief.isNotEmpty) {
+        buffer.writeln('## Project Overview');
+        buffer.writeln();
+        buffer.writeln(brief);
+        buffer.writeln();
+        buffer.writeln('---');
+        buffer.writeln();
+      }
     }
-    return file.readAsStringSync();
+
+    buffer.write(packMarkdown);
+    return buffer.toString();
   }
+}
+
+class _AutoSyncPrelude {
+  const _AutoSyncPrelude({
+    required this.synced,
+    required this.filesSynced,
+    required this.contextBefore,
+  });
+
+  final bool synced;
+  final int filesSynced;
+  final String contextBefore;
 }

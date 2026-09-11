@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.9.0
+
+### Added
+- MCP Phase 3: auto-sync on `get_context` when STALE (`mcp.auto_sync_on_get_context`, default true)
+- MCP Phase 3: project overview prepended to context packs (`mcp.include_project_brief`, default true)
+- MCP prompt: `flutter-feature-context` (project brief + feature pack)
+- MCP tool: `get_architecture`
+- MCP resource: `flutter-ai-context://features`
+
+### Improved
+- Feature flow inference includes `belongs_to_feature` graph members
+- Context resource template auto-syncs when STALE
+
 ## 0.8.0
 
 ### Added

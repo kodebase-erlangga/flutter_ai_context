@@ -27,7 +27,7 @@
 ```yaml
 # pubspec.yaml
 dev_dependencies:
-  flutter_ai_context: ^0.8.0
+  flutter_ai_context: ^0.9.0
 ```
 
 ```bash
@@ -90,8 +90,17 @@ dart run flutter_ai_context mcp
 }
 ```
 
-**Tools:** `project_status`, `list_features`, `get_context`, `sync_context`, `run_doctor`, `query_graph`  
-**Resources:** `flutter-ai-context://agents`, `architecture`, `graph`, `context/{scope}`
+**Tools:** `project_status`, `list_features`, `get_context`, `get_architecture`, `sync_context`, `run_doctor`, `query_graph`  
+**Resources:** `flutter-ai-context://agents`, `architecture`, `features`, `graph`, `context/{scope}`  
+**Prompts:** `flutter-feature-context` (project brief + feature pack)
+
+`get_context` auto-syncs when STALE by default. Configure in `flutter_ai_context.yaml`:
+
+```yaml
+mcp:
+  auto_sync_on_get_context: true
+  include_project_brief: true
+```
 
 See [doc/MCP_DESIGN.md](doc/MCP_DESIGN.md) for the full roadmap.
 
